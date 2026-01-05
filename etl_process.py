@@ -17,7 +17,7 @@ def clean_database():
     conn = get_db_connection()
     c = conn.cursor()
     # Orden inverso de dependencias para borrar
-    tables = ["presencias", "partidos", "jugadores", "rivales", "torneos", "arbitros", "tecnicos"]
+    tables = ["stats", "partidos", "jugadores", "rivales", "torneos", "arbitros", "tecnicos"]
     for table in tables:
         c.execute(f"DELETE FROM {table}") # Delete data, keep schema
         c.execute(f"DELETE FROM sqlite_sequence WHERE name='{table}'") # Reset autoincrement
@@ -491,12 +491,12 @@ def migrate_plantel(conn):
                     cursor = conn.cursor()
                     try:
                         cursor.execute("""
-                            INSERT OR REPLACE INTO presencias (id_partido, id_jugador, minutos_jugados, es_titular, goles, amarillas, rojas)
-                            VALUES (?, ?, ?, ?, 0, 0, 0)
+                            INSERT OR REPLACE INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, goles_marcados, goles_recibidos, amarillas, rojas)
+                            VALUES (?, ?, ?, ?, 0, 0, 0, 0)
                         """, (mid, pid, minutes, titular))
                         count_presencias += 1
                     except sqlite3.Error as e:
-                        print(f"Error insertando presencia {pid} en partido {mid}: {e}")
+                        print(f"Error insertando stats {pid} en partido {mid}: {e}")
             
             conn.commit()
             

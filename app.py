@@ -96,13 +96,15 @@ with tab2:
                  pj = int(s['pj']) if s['pj'] else 0
                  mins = int(s['minutos']) if s['minutos'] else 0
                  goles = int(s['goles']) if s['goles'] else 0
+                 recibidos = int(s['recibidos']) if s.get('recibidos') else 0
                  titular = int(s['titular']) if s['titular'] else 0
                  
-                 c1, c2, c3, c4 = st.columns(4)
+                 c1, c2, c3, c4, c5 = st.columns(5)
                  c1.metric("Partidos", pj)
                  c2.metric("Minutos", mins)
-                 c3.metric("Goles", goles, help=f"Incluye {int(init_g)} goles históricos/iniciales.")
-                 c4.metric("Titular", titular)
+                 c3.metric("Goles", goles, help=f"Incluye {int(init_g)} goles históricos.")
+                 c4.metric("Recibidos", recibidos)
+                 c5.metric("Titular", titular)
             
             st.write("##### Historial del Jugador")
             if not match_log.empty:

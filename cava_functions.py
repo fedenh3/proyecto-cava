@@ -63,10 +63,11 @@ def get_player_stats(jugador_id, initial_goals=0):
             SELECT COUNT(*) as pj, 
                    SUM(CASE WHEN es_titular=1 THEN 1 ELSE 0 END) as titular,
                    SUM(minutos_jugados) as minutos,
-                   SUM(goles) as goles,
+                   SUM(goles_marcados) as goles,
+                   SUM(goles_recibidos) as recibidos,
                    SUM(amarillas) as amarillas,
                    SUM(rojas) as rojas
-            FROM presencias
+            FROM stats
             WHERE id_jugador = ?
         """
         df = pd.read_sql(query, conn, params=(jugador_id,))
@@ -86,12 +87,13 @@ def get_player_matches(jugador_id):
     try:
         query = """
             SELECT p.fecha, r.nombre as rival, t.nombre as torneo,
-                   pr.minutos_jugados, pr.es_titular, pr.goles, pr.amarillas, pr.rojas
-            FROM presencias pr
-            JOIN partidos p ON pr.id_partido = p.id
+                   s.minutos_jugados, s.es_titular, s.goles_marcados as goles, 
+                   s.goles_recibidos, s.amarillas, s.rojas
+            FROM stats s
+            JOIN partidos p ON s.id_partido = p.id
             JOIN rivales r ON p.id_rival = r.id
             JOIN torneos t ON p.id_torneo = t.id
-            WHERE pr.id_jugador = ?
+            WHERE s.id_jugador = ?
             ORDER BY p.id DESC
         """
         return pd.read_sql(query, conn, params=(jugador_id,))
