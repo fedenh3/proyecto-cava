@@ -33,6 +33,23 @@ def extract_result(score_str):
         return int(match.group(1)), int(match.group(2))
     return None, None
 
+def remove_accents(input_str):
+    """Normalize string by removing accents"""
+    if not input_str: return ""
+    s = str(input_str)
+    replacements = (
+        ("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ñ", "n"),
+        ("Á", "A"), ("É", "E"), ("Í", "I"), ("Ó", "O"), ("Ú", "U"), ("Ñ", "N"),
+        ("Ü", "U"), ("ü", "u")
+    )
+    for a, b in replacements:
+        s = s.replace(a, b)
+    return s
+
+def db_norm(s): 
+    """Normalize for DB search comparison"""
+    return re.sub(r'[^A-Z0-9]', '', remove_accents(str(s)).upper())
+
 def get_or_create_rival(conn, rival_name):
     if not rival_name or pd.isna(rival_name): return None
     rival_name = str(rival_name).strip().upper()
@@ -144,14 +161,7 @@ def migrate_matches(conn):
     
     count = 0
     for index, row in df.iterrows():
-        # Determine Year from Date if Temporada missing
-        # If 'FECHA' is still missing (not mapped), try to find a date-like column?
-        # For now assume rename worked.
-        
         fecha_raw = row.get("FECHA", None)
-        # Verify if fecha_raw is really a date or something else
-        # Sometimes UNNAMED: 1 is empty?
-        
         fecha_str = parse_date(fecha_raw)
         
         # Infer Season from Torneo if available
@@ -160,9 +170,18 @@ def migrate_matches(conn):
         
         temp_val = row.get("TEMPORADA", None)
         if pd.isna(temp_val):
-            # Try to use Torneo as Season if it looks like year (e.g. 2018/2019)
-            if re.search(r"\d{4}", str(torneo_val)):
-                 temp_val = str(torneo_val)
+            # Try to use Torneo as Season
+            # 1. Look for 4 digits (e.g. 2019)
+            m4 = re.search(r"\d{4}", str(torneo_val))
+            
+            # 2. Look for 2 digits at end or preceded by space (e.g. APERTURA 19, CLAUSURA 20)
+            m2 = re.search(r"\b(1[5-9]|2[0-9])\b", str(torneo_val))
+            
+            if m4:
+                 temp_val = m4.group(0)
+            elif m2:
+                 # Infer 20xx
+                 temp_val = "20" + m2.group(1)
             else:
                  habitual_year = "2024"
                  if fecha_str:
@@ -183,17 +202,13 @@ def migrate_matches(conn):
         if cond_val not in ['L', 'V', 'N']: cond_val = 'L'
         
         c = conn.cursor()
-        # Extract DT and Arbitro
         dt_val = row.get("DT", None)
         id_dt = get_or_create_tecnico(conn, dt_val)
         
         arb_val = row.get("ÁRBITRO", None) 
-        # Excel column has accent 'ÁRBITRO'
-        # If not found, try without accent or other variations if rename failed?
         if arb_val is None: arb_val = row.get("ARBITRO", None)
         id_arb = get_or_create_arbitro(conn, arb_val)
         
-        c = conn.cursor()
         try:
             c.execute("""
                 INSERT OR IGNORE INTO partidos (fecha, id_torneo, id_rival, condicion, goles_favor, goles_contra, id_arbitro, id_tecnico)
@@ -206,50 +221,6 @@ def migrate_matches(conn):
     conn.commit()
     print(f"Migrados {count} partidos.")
 
-def find_match_id(conn, rival_name_partial, year_hint, match_date_hint=None):
-    """
-    Finds a match ID based on Rival name similar match and Year.
-    This is the semantic linking part.
-    """
-    if not rival_name_partial: return None
-    
-    rival_clean = rival_name_partial.strip().upper()
-    c = conn.cursor()
-    
-    # 1. Try to find Rival ID first
-    # We select all rivals and check string inclusion because headers might be "CLAYPOLE" and DB "CLUB CLAYPOLE"
-    c.execute("SELECT id, nombre FROM rivales")
-    all_rivals = c.fetchall()
-    
-    param_rival_ids = []
-    
-    for rid, rname in all_rivals:
-        # Simple fuzzy: check if one contains the other
-        if rival_clean in rname or rname in rival_clean:
-            param_rival_ids.append(rid)
-            
-    if not param_rival_ids:
-        return None
-        
-    # 2. Find match with these rivals in the given year/season
-    # We join with torneos to check season
-    placeholders = ','.join('?' for _ in param_rival_ids)
-    query = f"""
-        SELECT p.id, t.temporada 
-        FROM partidos p
-        JOIN torneos t ON p.id_torneo = t.id
-        WHERE p.id_rival IN ({placeholders})
-    """
-    c.execute(query, param_rival_ids)
-    matches = c.fetchall()
-    
-    # Filter by year hint
-    for mid, season in matches:
-        if str(year_hint) in str(season):
-            return mid
-            
-    return None
-
 def migrate_plantel(conn):
     print("--- Migrando Plantel y Presencias ---")
     xls = pd.ExcelFile(EXCEL_FILE)
@@ -258,13 +229,28 @@ def migrate_plantel(conn):
     
     total_presencias = 0
     
+    RIVAL_MAPPING = {
+        "CTRAL. BALLESTER": "CENTRAL BALLESTER",
+        "CTRO ESPAÑOL": "CENTRO ESPAÑOL",
+        "JUV. UNIDA": "JUVENTUD UNIDA",
+        "ARG ROSARIO": "ARGENTINO ROSARIO",
+        "ARG. DE QUILMES": "ARG. DE QUILMES",
+        "DEP. PARAGUAYO": "DEP. PARAGUAYO",
+        "CAMIONEROS": "CAMIONEROS",
+        "YUPANQUI": "YUPANQUI",
+        "LUJÁN": "LUJÁN",
+        "ATLAS": "ATLAS",
+        "CAÑUELAS": "CAÑUELAS",
+        "ESTRELLA DEL SUR": "ESTRELLA DEL SUR",
+        "SP. BARRACAS": "SP. BARRACAS"
+    }
+    
     for sheet in plantel_sheets:
         print(f"Procesando hoja: {sheet}")
         year_match = re.search(r"(\d{4})", sheet)
         sheet_year = year_match.group(1) if year_match else "2024"
         
         # 1. Read first few rows to understand structure
-        # We suspect Row 0 has Match Names (Fecha 1...) and Row 1 has Column Names (Apellido...)
         df_headers = pd.read_excel(xls, sheet_name=sheet, header=None, nrows=5)
         
         # Find the row with "APELLIDO" to serve as the Data Header
@@ -280,13 +266,9 @@ def migrate_plantel(conn):
             continue
             
         print(f"  > Data Header found at row {data_header_idx}")
-        print(f"DEBUG HEADERS ({sheet}):\n{df_headers.iloc[:data_header_idx+1].to_string()}")
+        # print(f"DEBUG HEADERS ({sheet}):\n{df_headers.iloc[:data_header_idx+1].to_string()}")
         
-        # The row with match names is likely the one above data_header_idx, or the same if mixed.
-        # Usually it is data_header_idx - 1
         match_info_row_idx = data_header_idx - 1 if data_header_idx > 0 else 0
-        
-        # Load the Match Info Row to parse match names
         match_row_values = df_headers.iloc[match_info_row_idx].values
         
         # Load main data
@@ -299,208 +281,158 @@ def migrate_plantel(conn):
         if not col_apellido: continue
         
         # Map DataFrame Column Index -> Match ID
-        # We iterate over columns by integer location to align with match_row_values
         col_map = {}
         
-        # Align match_row_values (which might include empty cells due to merge) with df columns
-        # Note: pandas read_excel with header=X might drop empty leading cols or shift? 
-        # Usually checking columns by index is safer if we trust the alignment.
-        
-        # We assume df.shape[1] == len(match_row_values) approximately.
-        # Actually, standard behavior: yes.
-        
+        # Forward Fill match headers to handle merged cells
+        filled_headers = []
+        last_header = None
+        for i, val in enumerate(match_row_values):
+            val_str = str(val).strip()
+            if val_str not in ["nan", "None", ""] and ("FECHA" in val_str.upper() or "VS" in val_str.upper()):
+                last_header = val_str
+                filled_headers.append(val_str)
+            elif last_header:
+                 filled_headers.append(last_header)
+            else:
+                 filled_headers.append(val_str)
+
         match_cnt = 0
+        c = conn.cursor()
+        
+        # Cache Rivals from DB
+        c.execute("SELECT id, nombre FROM rivales")
+        all_rivals = c.fetchall()
+
         for col_idx in range(len(df.columns)):
-            # Get the header from the row above
-            if col_idx < len(match_row_values):
-                header_val = str(match_row_values[col_idx]).strip()
+            if col_idx < len(filled_headers):
+                header_val = str(filled_headers[col_idx]).strip()
                 
-                # Check if this header looks like a match
+                # Check match header
                 if "FECHA" in header_val.upper() or "VS" in header_val.upper():
                     # Parse Match
                     parts = header_val.upper().split("VS")
                     rival_part = parts[1].strip() if len(parts) > 1 else header_val
                     
-                    # Clean Rival Part: remove (L), (V), results like 1-2
+                     # Extract Score if present (e.g. 2-1)
+                    score_match = re.search(r"(\d+)-(\d+)", header_val)
+                    gf_header, gc_header = None, None
+                    if score_match:
+                        try:
+                            gf_header = int(score_match.group(1))
+                            gc_header = int(score_match.group(2))
+                        except: pass
+
+                    # Clean Rival Part
                     rival_part = re.sub(r"\(\s*[LVN]\s*\)", "", rival_part) # Remove (L), (V)
                     rival_part = re.sub(r"\d+-\d+", "", rival_part) # Remove score 1-2
                     rival_part = re.sub(r"FECHA\s*\d+[:\s]*", "", rival_part) # Remove "FECHA 1:"
                     rival_part = rival_part.strip()
-        # Try to find match in DB
-        rival_norm = rival_part.upper()
-        year_val = sheet_year
-        
-        # --- CUSTOM MAPPING FOR TYPOS/ABBREVIATIONS ---
-        RIVAL_MAPPING = {
-            "CTRAL. BALLESTER": "CENTRAL BALLESTER",
-            "CTRO ESPAÑOL": "CENTRO ESPAÑOL",
-            "JUV. UNIDA": "JUVENTUD UNIDA",
-            "ARG ROSARIO": "ARGENTINO ROSARIO",
-            "ARG. DE QUILMES": "ARG. DE QUILMES", # db might be ARG.. or ARGENTINO
-            "DEP. PARAGUAYO": "DEP. PARAGUAYO",
-            "CAMIONEROS": "CAMIONEROS",
-            "YUPANQUI": "YUPANQUI",
-            "LUJÁN": "LUJÁN",
-            "ATLAS": "ATLAS",
-            "CAÑUELAS": "CAÑUELAS",
-            "ESTRELLA DEL SUR": "ESTRELLA DEL SUR",
-            "SP. BARRACAS": "SP. BARRACAS"
-        }
-        
-        if rival_norm in RIVAL_MAPPING:
-             rival_norm = RIVAL_MAPPING[rival_norm]
-        
-        # Also try simpler fuzzy normalization (remove periods)
-        rival_norm_clean = rival_norm.replace(".", "").replace("  ", " ")
-
-        match_id = None
-        
-        # 1. Exact Name + Year
-        # We need a helper to search ID by Name+Year efficiently.
-        # Ideally we loaded a catalog. For now, run query.
-        
-        # Try finding by name in DB
-        # Warning: "temporada" in DB is usually "2024" or inferred. 
-        # Match might belong to Torneo
-        # Helper to normalize for DB search
-        def db_norm(s): return re.sub(r'[^A-Z0-9]', '', str(s).upper())
-        # Helper to normalize for DB search
-        def db_norm(s): return re.sub(r'[^A-Z0-9]', '', str(s).upper())
-        
-        cand_clean = db_norm(rival_norm)
-        
-        # DEBUG: Specific check for Col 14 (Dep Paraguayo)
-        if col_idx == 14:
-             print(f"    [DEBUG COL 14] Header='{header_val}' Clean='{rival_norm}' Norm='{cand_clean}'")
-
-        # We fetch ALL matches involving a rival that looks like this
-        c = conn.cursor()
-        c.execute("SELECT id, nombre FROM rivales")
-        all_rivals = c.fetchall()
-        
-        target_rival_ids = []
-        for rid, rname in all_rivals:
-             if cand_clean in db_norm(rname) or db_norm(rname) in cand_clean:
-                 target_rival_ids.append(rid)
-        
-        if target_rival_ids:
-             placeholders = ','.join('?' for _ in target_rival_ids)
-             q = f"""
-                SELECT p.id, t.temporada, r.nombre
-                FROM partidos p
-                JOIN torneos t ON p.id_torneo = t.id
-                JOIN rivales r ON p.id_rival = r.id
-                WHERE p.id_rival IN ({placeholders})
-             """
-             c.execute(q, target_rival_ids)
-             potential_matches = c.fetchall()
-             
-             # Filter by Year
-             for mid, mseason, mname in potential_matches:
-                 if str(year_val) in str(mseason):
-                     match_id = mid
-                     # print(f"    -> Linked {rival_norm} to Match {mid} ({mname}) in {mseason}")
-                     break
-        
-        if match_id:
-            col_map[col_idx] = match_id
-    
-    print(f"  > Vinculadas {len(col_map)} columnas de stats a partidos.")
-    
-    # --- GOALS EXTRACTION (Summary Column) ---
-    # Find "GOLES" column idx
-    goles_col_idx = None
-    for c in df.columns:
-        if str(c).upper().strip() in ["GOLES", "GOL", "G"]:
-            goles_col_idx = c
-            print(f"  > Columna de Goles detectda: {c}")
-            break
-
-    count_presencias = 0
-    for index, row in df.iterrows():
-        nombre = row.get("NOMBRE")
-        apellido = row.get("APELLIDO")
-        
-        if pd.isna(nombre) and pd.isna(apellido):
-             # print(f"Skipping row {index}: No Name/Surname")
-             continue
-             
-        # Debug Abalos
-        if "BALOS" in str(apellido).upper():
-             print(f"    [DEBUG ROW] Processing {apellido} {nombre}. PID found? {get_or_create_jugador(conn, nombre, apellido)}")
-        
-        if pd.notna(nombre) or pd.notna(apellido): # Relax: allow one missing? No, user said name is there.
-            pid = get_or_create_jugador(conn, nombre, apellido)
-            pid = get_or_create_jugador(conn, nombre, apellido)
-            
-            # --- Update Initial Goals ---
-            if goles_col_idx:
-                try:
-                    gval = row[goles_col_idx]
-                    if pd.notna(gval):
-                        ival = int(float(gval))
-                        # Update player logic: accumulating or setting?
-                        # Since we process multiple sheets, we should ADD.
-                        # But wait, one player might be in multiple sheets.
-                        # We should simple add `ival`.
-                        cur = conn.cursor()
-                        cur.execute("UPDATE jugadores SET goles_iniciales = goles_iniciales + ? WHERE id = ?", (ival, pid))
-                except: pass
-
-            # Iterate columns for matches
-            for col_idx, mid in col_map.items():
-                # Get value from row by integer index
-                # data dataframe `df` has columns. `col_map` keys are integer indices of the original excel row (0-based)
-                # We need to map `col_idx` to `df` column name or location.
-                # `df` was created with `header=header_row`. 
-                # The columns in `df` correspond to Excel columns.
-                # `col_idx` comes from `df_headers` (raw top rows).
-                # If header_row was e.g. 1, then df column 0 is Excel column 0.
-                
-                # Careful: Pandas generic column names if duplicate.
-                # Let's use `iloc`.
-                val = row.iloc[col_idx]
-                
-                minutes = 0
-                titular = 0
-                
-                # Logic for values
-                val_str = str(val).strip().upper()
-                if val_str in ["NAN", "NONE", ""]:
-                    continue
-                
-                if val_str.isdigit():
-                    minutes = int(val_str)
-                    if minutes > 45: titular = 1 # Heuristic
-                    # If minutes is small (e.g. 16), likely substitute.
-                    # Or maybe started and injured. Titular status is hard to know 100% without explicit marker.
-                    # Usually "X" = 90 titular. Number = minutes played.
-                    # If < 90, could be subbed in OR subbed out.
-                    # Let's assume Titular implies started?
-                    # The excel sometimes has "S" column or similar? User didn't specify.
-                    # For now: > 0 minutes = played.
                     
-                elif val_str == 'X':
-                    minutes = 90
-                    titular = 1
-                else:
-                    # Maybe "45'" or similar
-                    continue
+                    if rival_part in RIVAL_MAPPING:
+                         rival_part = RIVAL_MAPPING[rival_part]
+
+                    rival_norm_clean = remove_accents(rival_part).replace(".", "").replace("  ", " ")
+                    cand_clean = db_norm(rival_part)
+                    
+                    match_id = None
+                    
+                    target_rival_ids = []
+                    for rid, rname in all_rivals:
+                         if cand_clean in db_norm(rname) or db_norm(rname) in cand_clean:
+                             target_rival_ids.append(rid)
+                    
+                    if target_rival_ids:
+                         placeholders = ','.join('?' for _ in target_rival_ids)
+                         q = f"""
+                            SELECT p.id, t.temporada, r.nombre, p.goles_favor, p.goles_contra
+                            FROM partidos p
+                            JOIN torneos t ON p.id_torneo = t.id
+                            JOIN rivales r ON p.id_rival = r.id
+                            WHERE p.id_rival IN ({placeholders})
+                         """
+                         c.execute(q, target_rival_ids)
+                         potential_matches = c.fetchall()
+                         
+                         for mid, mseason, mname, mgf, mgc in potential_matches:
+                             # Strategy 1: Match by Score (Strong signal)
+                             if gf_header is not None and gc_header is not None:
+                                 if mgf == gf_header and mgc == gc_header:
+                                      match_id = mid
+                                      break
+                             
+                             # Strategy 2: Match by Year (Fallback)
+                             if str(sheet_year) in str(mseason):
+                                 match_id = mid
+                                 break
+                    
+                    if match_id:
+                        col_map[col_idx] = match_id
+    
+        print(f"  > Vinculadas {len(set(col_map.values()))} columnas de stats a partidos distintos: {len(col_map)} columnas totales mapped.")
+        
+        # --- GOALS EXTRACTION ---
+        goles_col_idx = None
+        for c in df.columns:
+            if str(c).upper().strip() in ["GOLES", "GOL", "G"]:
+                goles_col_idx = c
+                # print(f"  > Columna de Goles detectda: {c}")
+                break
+
+        count_presencias = 0
+        for index, row in df.iterrows():
+            nombre = row.get("NOMBRE")
+            apellido = row.get("APELLIDO")
+            
+            if pd.isna(nombre) and pd.isna(apellido):
+                 continue
+            
+            if pd.notna(nombre) or pd.notna(apellido):
+                pid = get_or_create_jugador(conn, nombre, apellido)
                 
-                if minutes > 0:
-                    cursor = conn.cursor()
+                # --- Update Initial Goals ---
+                if goles_col_idx:
                     try:
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, goles_marcados, goles_recibidos, amarillas, rojas)
-                            VALUES (?, ?, ?, ?, 0, 0, 0, 0)
-                        """, (mid, pid, minutes, titular))
-                        count_presencias += 1
-                    except sqlite3.Error as e:
-                        print(f"Error insertando stats {pid} en partido {mid}: {e}")
+                        gval = row[goles_col_idx]
+                        if pd.notna(gval):
+                            ival = int(float(gval))
+                            cur = conn.cursor()
+                            cur.execute("UPDATE jugadores SET goles_iniciales = goles_iniciales + ? WHERE id = ?", (ival, pid))
+                    except: pass
+
+                # Iterate columns for matches
+                for col_idx, mid in col_map.items():
+                    val = row.iloc[col_idx]
+                    
+                    minutes = 0
+                    titular = 0
+                    
+                    val_str = str(val).strip().upper()
+                    if val_str in ["NAN", "NONE", ""]:
+                        continue
+                    
+                    if val_str.isdigit():
+                        minutes = int(val_str)
+                        if minutes > 45: titular = 1
+                    elif val_str == 'X':
+                        minutes = 90
+                        titular = 1
+                    else:
+                        continue
+                    
+                    if minutes > 0:
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, goles_marcados, goles_recibidos, amarillas, rojas)
+                                VALUES (?, ?, ?, ?, 0, 0, 0, 0)
+                            """, (mid, pid, minutes, titular))
+                            count_presencias += 1
+                        except sqlite3.Error as e:
+                            pass
+                
+                conn.commit()
             
-            conn.commit()
-            
-    print(f"--- Hoja procesada. Total presencias cargadas: {count_presencias} ---")
+        print(f"--- Hoja procesada. Total stats cargadas: {count_presencias} ---")
 
 def main():
     clean_database()
