@@ -142,3 +142,60 @@ def save_match(fecha, id_torneo, id_rival, condicion, gf, gc):
         return False
     finally:
         conn.close()
+
+# ========================================
+# AUTHENTICATION FUNCTIONS
+# ========================================
+
+def existe_admin():
+    """Check if at least one admin user exists"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM usuarios WHERE rol='admin'")
+        count = c.fetchone()[0]
+        return count > 0
+    except:
+        return False
+    finally:
+        conn.close()
+
+def login_usuario(username, password):
+    """Authenticate user. Returns (success, user_data or error_msg)"""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM usuarios WHERE username = ?", (username,))
+        user = c.fetchone()
+        if not user:
+            return False, "Usuario no encontrado"
+        # user is a tuple: (id, username, password, rol, nombre, created_at)
+        if user[2] != password:  # index 2 is password
+            return False, "Contraseña incorrecta"
+        return True, {
+            'id': user[0],
+            'username': user[1],
+            'rol': user[3],
+            'nombre': user[4]
+        }
+    finally:
+        conn.close()
+
+def crear_usuario(username, password, nombre="Admin"):
+    """Create new admin user"""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        c = conn.cursor()
+        c.execute("INSERT INTO usuarios (username, password, nombre, rol) VALUES (?, ?, ?, 'admin')", 
+                  (username, password, nombre))
+        conn.commit()
+        return True, "Usuario creado exitosamente"
+    except Exception as e:
+        if "UNIQUE constraint" in str(e):
+            return False, "El nombre de usuario ya existe"
+        return False, str(e)
+    finally:
+        conn.close()

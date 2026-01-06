@@ -31,6 +31,15 @@ CREATE TABLE IF NOT EXISTS tecnicos (
     CONSTRAINT nombre_dt_no_vacio CHECK(length(nombre) > 0)
 );
 
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    rol VARCHAR(20) DEFAULT 'admin',
+    nombre VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS jugadores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre VARCHAR(100),
