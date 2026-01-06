@@ -4,7 +4,47 @@ import altair as alt
 import cava_functions as cf
 
 # --- Page Config ---
-st.set_page_config(page_title="CAVA Stats", layout="wide")
+st.set_page_config(page_title="CAVA Stats", layout="wide", page_icon="⚽")
+
+# --- Custom CSS ---
+st.markdown("""
+    <style>
+    .main {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    .stMetric {
+        background: rgba(255, 255, 255, 0.4);
+        padding: 15px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(5px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    h1, h2, h3 {
+        color: #1b5e20;
+        font-family: 'Outfit', sans-serif;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #e8f5e9;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: transparent;
+        border-radius: 4px 4px 0px 0px;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #2e7d32 !important;
+        color: white !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # === MAIN APP ===
 st.title("⚽ Estadísticas C.A. Victoriano Arenas")
@@ -42,7 +82,59 @@ if sel_torneo_name != "Todos":
             break
 
 # === TABS ===
-tab1, tab2, tab3 = st.tabs(["📊 Resumen y Partidos", "🏃 Jugadores", "➕ Carga"])
+tab0, tab1, tab2, tab3 = st.tabs(["📈 Análisis", "📊 Resumen y Partidos", "🏃 Jugadores", "➕ Carga"])
+
+# === TAB 0: ANÁLISIS (DASHBOARD) ===
+with tab0:
+    st.subheader("Dashboard General")
+    st.write(f"Mostrando datos de: **{sel_temporada}** / **{sel_torneo_name}**")
+    
+    # 1. Global Metrics
+    g_stats = cf.get_global_stats(sel_torneo_id, sel_temporada)
+    
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("PJ", g_stats.get('pj', 0))
+    m2.metric("PG", g_stats.get('pg', 0))
+    m3.metric("PE", g_stats.get('pe', 0))
+    m4.metric("PP", g_stats.get('pp', 0))
+    m5.metric("G. Favor", g_stats.get('gf', 0))
+    m6.metric("G. Contra", g_stats.get('gc', 0))
+    
+    st.divider()
+    
+    # 2. Charts
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        st.write("##### 🏆 Top Goleadores")
+        df_top_goals = cf.get_top_stat("goles_marcados", 10, True)
+        if not df_top_goals.empty:
+            st.bar_chart(df_top_goals.set_index("Jugador"), color="#2e7d32")
+        else:
+            st.info("No hay datos de goles.")
+            
+    with col_chart2:
+        st.write("##### ⏳ Top Presencias (Minutos)")
+        df_top_mins = cf.get_top_stat("minutos_jugados", 10, False)
+        if not df_top_mins.empty:
+            st.bar_chart(df_top_mins.set_index("Jugador"), color="#1565c0")
+        else:
+            st.info("No hay datos de minutos.")
+    
+    # 3. Distribution Chart
+    st.divider()
+    st.write("##### 📊 Distribución de Resultados")
+    if g_stats.get('pj', 0) > 0:
+        res_data = pd.DataFrame({
+            "Resultado": ["Ganados", "Empatados", "Perdidos"],
+            "Cantidad": [g_stats['pg'], g_stats['pe'], g_stats['pp']]
+        })
+        chart_res = alt.Chart(res_data).mark_arc().encode(
+            theta=alt.Theta(field="Cantidad", type="quantitative"),
+            color=alt.Color(field="Resultado", type="nominal", scale=alt.Scale(range=["#4caf50", "#ffeb3b", "#f44336"])),
+            tooltip=["Resultado", "Cantidad"]
+        ).properties(width=400, height=300)
+        st.altair_chart(chart_res, use_container_width=True)
 
 # === TAB 1: Resumen y Partidos (PUBLIC) ===
 with tab1:

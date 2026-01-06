@@ -199,3 +199,64 @@ def crear_usuario(username, password, nombre="Admin"):
         return False, str(e)
     finally:
         conn.close()
+
+# ========================================
+# ANALYTICS FUNCTIONS
+# ========================================
+
+def get_global_stats(torneo_id=None, temporada=None):
+    """Global record: Win, Draw, Loss, Goals"""
+    conn = get_connection()
+    if not conn: return {}
+    try:
+        query = "SELECT goles_favor, goles_contra FROM partidos p JOIN torneos t ON p.id_torneo = t.id WHERE 1=1"
+        params = []
+        if torneo_id and torneo_id != "Todos":
+            query += " AND t.id = ?"
+            params.append(torneo_id)
+        if temporada and temporada != "Todas":
+            query += " AND t.temporada = ?"
+            params.append(temporada)
+            
+        df = pd.read_sql(query, conn, params=params)
+        if df.empty: return {"pj":0, "pg":0, "pe":0, "pp":0, "gf":0, "gc":0}
+        
+        pj = len(df)
+        pg = len(df[df['goles_favor'] > df['goles_contra']])
+        pp = len(df[df['goles_favor'] < df['goles_contra']])
+        pe = len(df[df['goles_favor'] == df['goles_contra']])
+        gf = df['goles_favor'].sum()
+        gc = df['goles_contra'].sum()
+        
+        return {"pj":pj, "pg":pg, "pe":pe, "pp":pp, "gf":gf, "gc":gc}
+    finally:
+        conn.close()
+
+def get_top_stat(stat_col="goles_marcados", limit=10, sum_initial=True):
+    """Top players by specific stat"""
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        if stat_col == "goles_marcados" and sum_initial:
+            query = f"""
+                SELECT j.nombre || ' ' || j.apellido as Jugador,
+                       SUM(s.{stat_col}) + j.goles_iniciales as Total
+                FROM jugadores j
+                LEFT JOIN stats s ON j.id = s.id_jugador
+                GROUP BY j.id
+                ORDER BY Total DESC
+                LIMIT ?
+            """
+        else:
+            query = f"""
+                SELECT j.nombre || ' ' || j.apellido as Jugador,
+                       SUM(s.{stat_col}) as Total
+                FROM jugadores j
+                JOIN stats s ON j.id = s.id_jugador
+                GROUP BY j.id
+                ORDER BY Total DESC
+                LIMIT ?
+            """
+        return pd.read_sql(query, conn, params=(limit,))
+    finally:
+        conn.close()
