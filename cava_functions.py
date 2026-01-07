@@ -182,57 +182,63 @@ def get_global_stats(torneo_id=None, temporada=None):
     finally:
         conn.close()
 
-def get_top_stat(stat_col="goles_marcados", limit=10, sum_initial=True):
+def get_top_stat(stat_col="goles_marcados", limit=10, sum_initial=True, torneo_id=None, temporada=None):
     """
-    Retorna el ranking de los mejores jugadores en una estadística específica
-    (ej: Goleadores). Suma automáticamente los valores históricos del Excel.
+    Retorna el ranking de los mejores jugadores. 
+    Si hay filtros (torneo/temporada), NO suma los valores históricos iniciales.
     """
     conn = get_connection()
     if not conn: return pd.DataFrame()
     try:
-        if stat_col == "goles_marcados" and sum_initial:
-            query = f"""
-                SELECT j.nombre || ' ' || j.apellido as Jugador,
-                       IFNULL(SUM(s.{stat_col}), 0) + IFNULL(j.goles_marcados_inicial, 0) as Total
-                FROM jugadores j
-                LEFT JOIN stats s ON j.id = s.id_jugador
-                GROUP BY j.id
-                ORDER BY Total DESC
-                LIMIT ?
-            """
-        elif stat_col == "goles_recibidos" and sum_initial:
-            query = f"""
-                SELECT j.nombre || ' ' || j.apellido as Jugador,
-                       IFNULL(SUM(s.{stat_col}), 0) + IFNULL(j.goles_recibidos_inicial, 0) as Total
-                FROM jugadores j
-                LEFT JOIN stats s ON j.id = s.id_jugador
-                GROUP BY j.id
-                ORDER BY Total DESC
-                LIMIT ?
-            """
-        else:
-            query = f"""
-                SELECT j.nombre || ' ' || j.apellido as Jugador,
-                       IFNULL(SUM(s.{stat_col}), 0) as Total
-                FROM jugadores j
-                LEFT JOIN stats s ON j.id = s.id_jugador
-                GROUP BY j.id
-                ORDER BY Total DESC
-                LIMIT ?
-            """
-        return pd.read_sql(query, conn, params=(limit,))
+        where_clause = "WHERE 1=1"
+        params = []
+        if torneo_id and torneo_id != "Todos":
+            where_clause += " AND p.id_torneo = ?"
+            params.append(torneo_id)
+        if temporada and temporada != "Todas":
+            where_clause += " AND t.temporada = ?"
+            params.append(temporada)
+            
+        join_clause = "LEFT JOIN stats s ON j.id = s.id_jugador LEFT JOIN partidos p ON s.id_partido = p.id LEFT JOIN torneos t ON p.id_torneo = t.id"
+        
+        # Si NO hay filtros activos y sum_initial es True, usamos la lógica histórica
+        use_initial = sum_initial and (not torneo_id or torneo_id == "Todos") and (not temporada or temporada == "Todas")
+        
+        initial_col = f"j.{stat_col}_inicial" if stat_col in ["goles_marcados", "goles_recibidos"] and use_initial else "0"
+        
+        query = f"""
+            SELECT j.nombre || ' ' || j.apellido as Jugador,
+                   IFNULL(SUM(s.{stat_col}), 0) + IFNULL({initial_col}, 0) as Total
+            FROM jugadores j
+            {join_clause}
+            {where_clause}
+            GROUP BY j.id
+            HAVING Total > 0
+            ORDER BY Total DESC
+            LIMIT ?
+        """
+        params.append(limit)
+        return pd.read_sql(query, conn, params=params)
     finally:
         conn.close()
 
-def get_dt_stats():
+def get_dt_stats(torneo_id=None, temporada=None):
     """
-    Calcula la efectividad de cada Director Técnico basándose en los partidos dirigidos.
-    Efectividad = (Puntos Obtenidos / Puntos Posibles) * 100
+    Calcula la efectividad de los DTs, permitiendo filtrar por torneo/temporada.
     """
     conn = get_connection()
     if not conn: return pd.DataFrame()
     try:
-        query = """
+        where = "WHERE 1=1"
+        params = []
+        if torneo_id and torneo_id != "Todos":
+            where += " AND t_orn.id = ?"
+            params.append(torneo_id)
+        if temporada and temporada != "Todas":
+            where += " AND t_orn.temporada = ?"
+            params.append(temporada)
+            
+        query = f"""
             SELECT t.nombre as Tecnico,
                    COUNT(p.id) as PJ,
                    SUM(CASE WHEN p.goles_favor > p.goles_contra THEN 1 ELSE 0 END) as PG,
@@ -242,17 +248,72 @@ def get_dt_stats():
                    SUM(p.goles_contra) as GC
             FROM partidos p
             JOIN tecnicos t ON p.id_tecnico = t.id
+            JOIN torneos t_orn ON p.id_torneo = t_orn.id
+            {where}
             GROUP BY t.id
             HAVING PJ > 0
             ORDER BY PJ DESC
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=params)
         
-        # Calcular Puntos y Efectividad
         df['PTS'] = (df['PG'] * 3) + (df['PE'] * 1)
         df['Efectividad'] = (df['PTS'] / (df['PJ'] * 3) * 100).round(1)
         
         return df.sort_values(by='Efectividad', ascending=False)
+    finally:
+        conn.close()
+
+def get_result_distribution(torneo_id=None, temporada=None):
+    """
+    Retorna el conteo de Victorias, Empates y Derrotas para gráficos de torta.
+    """
+    stats = get_global_stats(torneo_id, temporada)
+    if not stats: return pd.DataFrame()
+    
+    return pd.DataFrame({
+        'Resultado': ['Ganados', 'Empatados', 'Perdidos'],
+        'Cantidad': [stats['pg'], stats['pe'], stats['pp']]
+    })
+
+def get_recent_form(limit=5, torneo_id=None, temporada=None):
+    """
+    Retorna los ultimos N partidos con un indicador visual de resultado.
+    """
+    conn = get_connection()
+    try:
+        where = "WHERE 1=1"
+        params = []
+        if torneo_id and torneo_id != "Todos":
+            where += " AND p.id_torneo = ?"
+            params.append(torneo_id)
+        if temporada and temporada != "Todas":
+            where += " AND t.temporada = ?"
+            params.append(temporada)
+            
+        query = f"""
+            SELECT p.goles_favor, p.goles_contra, r.nombre as rival, 
+                   p.nro_fecha
+            FROM partidos p
+            JOIN rivales r ON p.id_rival = r.id
+            JOIN torneos t ON p.id_torneo = t.id
+            {where}
+            ORDER BY p.id DESC
+            LIMIT ?
+        """
+        params.append(limit)
+        df = pd.read_sql(query, conn, params=params)
+        
+        # Agregamos columna de icono
+        def get_icon(row):
+            if row['goles_favor'] > row['goles_contra']: return "✅" # Ganado
+            elif row['goles_favor'] == row['goles_contra']: return "➖" # Empate
+            else: return "❌" # Perdido
+            
+        if not df.empty:
+            df['Resultado'] = df.apply(get_icon, axis=1)
+            # Ordenamos cronológicamente (antiguo a nuevo) para mostrar la racha
+            df = df.sort_values(by='nro_fecha') 
+        return df
     finally:
         conn.close()
 

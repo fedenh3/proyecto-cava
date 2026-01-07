@@ -60,50 +60,91 @@ with tab0:
         
     g_stats = cf.get_global_stats(torneo_id=tid, temporada=sel_temp)
     
+    # Cálculo de Efectividad Global para la selección
+    efectividad_val = 0
+    if g_stats['pj'] > 0:
+        pts = (g_stats['pg'] * 3) + g_stats['pe']
+        efectividad_val = (pts / (g_stats['pj'] * 3)) * 100
+    
     # Fila de tarjetas de métricas
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("PJ", g_stats['pj'])
-    m2.metric("PG", g_stats['pg'])
-    m3.metric("PE", g_stats['pe'])
-    m4.metric("PP", g_stats['pp'])
-    m5.metric("GF", g_stats['gf'])
-    m6.metric("GC", g_stats['gc'])
+    m1.metric("Partidos", g_stats['pj'])
+    m2.metric("Ganados", g_stats['pg'])
+    m3.metric("Empatados", g_stats['pe'])
+    m4.metric("Perdidos", g_stats['pp'])
+    m5.metric("Efectividad", f"{efectividad_val:.1f}%")
+    m6.metric("Goles (F/C)", f"{g_stats['gf']} / {g_stats['gc']}")
+
+    st.markdown("---")
+    
+    # --- FILA DE GRÁFICOS (3 Columnas) ---
+    col_g1, col_g2, col_g3 = st.columns(3)
+    
+    with col_g1:
+        st.markdown("##### Rendimiento")
+        df_dist = cf.get_result_distribution(torneo_id=tid, temporada=sel_temp)
+        if not df_dist.empty and df_dist['Cantidad'].sum() > 0:
+            pie = alt.Chart(df_dist).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Cantidad", type="quantitative"),
+                color=alt.Color(field="Resultado", scale=alt.Scale(domain=['Ganados', 'Empatados', 'Perdidos'], range=['#28a745', '#ffc107', '#dc3545'])),
+                tooltip=["Resultado", "Cantidad"]
+            )
+            st.altair_chart(pie, use_container_width=True)
+        else:
+            st.info("Sin datos")
+
+    with col_g2:
+        st.markdown("##### Goleadores")
+        # Pasamos los filtros a get_top_stat
+        df_top_g = cf.get_top_stat("goles_marcados", limit=5, torneo_id=tid, temporada=sel_temp)
+        if not df_top_g.empty:
+            chart_g = alt.Chart(df_top_g).mark_bar(cornerRadiusEnd=4).encode(
+                x=alt.X('Total:Q', title=None),
+                y=alt.Y('Jugador:N', sort='-x', title=None),
+                color=alt.value("#007bff"),
+                tooltip=["Jugador", "Total"]
+            )
+            st.altair_chart(chart_g, use_container_width=True)
+        else:
+            st.info("Sin datos")
+
+    with col_g3:
+        st.markdown("##### Más Minutos")
+        # Pasamos los filtros a get_top_stat (sum_initial=False para ver solo lo filtrado)
+        df_top_m = cf.get_top_stat("minutos_jugados", limit=5, sum_initial=False, torneo_id=tid, temporada=sel_temp)
+        if not df_top_m.empty:
+            chart_m = alt.Chart(df_top_m).mark_bar(cornerRadiusEnd=4).encode(
+                x=alt.X('Total:Q', title=None),
+                y=alt.Y('Jugador:N', sort='-x', title=None),
+                color=alt.value("#17a2b8"),
+                tooltip=["Jugador", "Total"]
+            )
+            st.altair_chart(chart_m, use_container_width=True)
+        else:
+            st.info("Sin datos")
+            
+    # --- RACHA DE FORMA ---
+    st.markdown("##### Racha Actual")
+    df_form = cf.get_recent_form(limit=5, torneo_id=tid, temporada=sel_temp)
+    if not df_form.empty:
+        # Mostramos bolitas de colores (emojies)
+        cols_form = st.columns(len(df_form))
+        for idx, row in df_form.iterrows():
+            with cols_form[idx]:
+                st.markdown(f"<h2 style='text-align: center;'>{row['Resultado']}</h2>", unsafe_allow_html=True)
+                st.caption(f"{row['rival']} ({row['goles_favor']}-{row['goles_contra']})")
+    else:
+        st.write("Sin partidos recientes.")
 
     st.divider()
     
-    c1, c2 = st.columns(2)
-    # Gráfico de Goleadores (Toma datos detallados + histórico)
-    with c1:
-        st.write("**Top Goleadores**")
-        df_top_g = cf.get_top_stat("goles_marcados", limit=7)
-        if not df_top_g.empty:
-            chart_g = alt.Chart(df_top_g).mark_bar(cornerRadiusEnd=4).encode(
-                x='Total:Q',
-                y=alt.Y('Jugador:N', sort='-x'),
-                color=alt.value("#007bff")
-            )
-            st.altair_chart(chart_g, use_container_width=True)
-
-    # Gráfico de Presencias (Minutos totales)
-    with c2:
-        st.write("**Top Presencias (Minutos)**")
-        df_top_m = cf.get_top_stat("minutos_jugados", limit=7, sum_initial=False)
-        if not df_top_m.empty:
-            chart_m = alt.Chart(df_top_m).mark_bar(cornerRadiusEnd=4).encode(
-                x='Total:Q',
-                y=alt.Y('Jugador:N', sort='-x'),
-                color=alt.value("#28a745")
-            )
-            st.altair_chart(chart_m, use_container_width=True)
-
-    st.divider()
-    st.write("**Efectividad de Directores Técnicos**")
-    df_dt = cf.get_dt_stats()
+    # Tabla de DTs filtrada
+    st.markdown("##### Efectividad DTs")
+    df_dt = cf.get_dt_stats(torneo_id=tid, temporada=sel_temp)
     if not df_dt.empty:
-        # Formatear la efectividad con el símbolo %
         df_dt_display = df_dt.copy()
         df_dt_display['Efectivid.'] = df_dt_display['Efectividad'].astype(str) + "%"
-        st.dataframe(df_dt_display[['Tecnico', 'PJ', 'PG', 'PE', 'PP', 'PTS', 'Efectivid.']], 
+        st.dataframe(df_dt_display[['Tecnico', 'PJ', 'PG', 'Efectivid.', 'PTS']], 
                      use_container_width=True, hide_index=True)
 
     st.divider()
