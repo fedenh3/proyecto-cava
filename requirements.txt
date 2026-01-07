@@ -2,3 +2,6 @@ streamlit
 pandas
 openpyxl
 altair
+sqlite3
+# Requerido para leer archivos de Excel modernos
+xlrd
