@@ -63,41 +63,57 @@ if not check_db_integrity():
     st.success("✅ ¡Todo listo! Cargando dashboard...")
     st.rerun()
 
-# Configuración inicial de la página (Título e ícono)
+import admin_module as admin
+
+# ==============================================================================
+# CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO)
+# ==============================================================================
 st.set_page_config(page_title="CAVA Stats", page_icon="⚽", layout="wide")
 
-# Diseño estético (CSS) para una interfaz minimalista y profesional
+import admin_module as admin
+
+# Diseño estético (CSS)
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
-    .stMetric {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
+    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        font-weight: 600;
-    }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
+# ==============================================================================
+# MODO DE NAVEGACIÓN
+# ==============================================================================
+view_mode = st.sidebar.radio("Vista", ["📊 Dashboard Público", "⚙️ Administración"])
+
+if view_mode == "⚙️ Administración":
+    admin.main()
+    st.stop()
+
+# ==============================================================================
+# DASHBOARD PÚBLICO
+# ==============================================================================
 st.title("⚽ CAVA - Sistema de Estadísticas")
 
-# Cargamos los datos básicos desde la lógica de la base de datos
+# Cargamos los datos básicos
 df_torneos = cf.load_torneos()
 df_jugadores = cf.load_jugadores()
-temporadas = ["Todas"] + sorted(df_torneos['temporada'].unique().tolist(), reverse=True)
 
-# BARRA LATERAL (Filtros globales para toda la App)
+if df_torneos.empty:
+    st.warning("No hay datos de torneos disponibles.")
+    temporadas = ["Todas"]
+else:
+    temporadas = ["Todas"] + sorted(df_torneos['temporada'].unique().tolist(), reverse=True)
+
+# BARRA LATERAL (Filtros)
 with st.sidebar:
     st.header("Filtros")
     sel_temp = st.selectbox("Temporada", temporadas)
     
-    if sel_temp == "Todas":
+    if df_torneos.empty:
+        torneos_list = ["Todos"]
+    elif sel_temp == "Todas":
         torneos_list = ["Todos"] + df_torneos['nombre'].unique().tolist()
     else:
         torneos_list = ["Todos"] + df_torneos[df_torneos['temporada'] == sel_temp]['nombre'].tolist()

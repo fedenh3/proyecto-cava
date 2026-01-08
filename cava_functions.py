@@ -354,3 +354,108 @@ def get_stats_against_rival(rival_id):
         }
     finally:
         conn.close()
+
+# ==============================================================================
+# FUNCIONES DE ESCRITURA (ADMIN)
+# ==============================================================================
+
+def create_user(username, password, nombre):
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        ignore = "OR IGNORE" if "sqlite" in str(conn.__class__).lower() else ""
+        conflict = "ON CONFLICT DO NOTHING" if ignore == "" else ""
+        
+        c = conn.cursor()
+        # Verificar si existe
+        c.execute(f"SELECT id FROM usuarios WHERE username = {ph}", (username,))
+        if c.fetchone():
+            return False, "El usuario ya existe"
+            
+        c.execute(f"INSERT {ignore} INTO usuarios (username, password, rol, nombre) VALUES ({ph}, {ph}, 'admin', {ph}) {conflict}",
+                 (username, password, nombre))
+        conn.commit()
+        return True, "Usuario creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error DB: {e}"
+    finally:
+        conn.close()
+
+def save_match(match_data, df_stats):
+    """
+    Guarda un partido y sus estadísticas en una transacción atómica.
+    match_data: dict con keys (id_torneo, id_rival, fecha, condicion, gf, gc)
+    df_stats: DataFrame con cols (id_jugador, minutos, goles, amarillas, rojas)
+    """
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # 1. Insertar Partido
+        query_match = f"""
+            INSERT INTO partidos (id_torneo, id_rival, nro_fecha, condicion, goles_favor, goles_contra)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+        """
+        # Postgres necesita RETURNING para obtener el ID insertado
+        if "psycopg2" in str(conn.__class__):
+            query_match += " RETURNING id"
+            c.execute(query_match, (
+                match_data['id_torneo'], match_data['id_rival'], match_data['fecha'],
+                match_data['condicion'], match_data['gf'], match_data['gc']
+            ))
+            match_id = c.fetchone()[0]
+        else:
+            # SQLite usa lastrowid
+            c.execute(query_match, (
+                match_data['id_torneo'], match_data['id_rival'], match_data['fecha'],
+                match_data['condicion'], match_data['gf'], match_data['gc']
+            ))
+            match_id = c.lastrowid
+
+        # 2. Preparar Stats
+        batch_stats = []
+        is_pg = "psycopg2" in str(conn.__class__)
+        
+        # Iteramos solo los jugadores que jugaron o fueron al banco (pj > 0 o suplente)
+        for _, row in df_stats.iterrows():
+            mins = int(row['minutos'])
+            if mins > 0 or row['rojas'] > 0 or row['amarillas'] > 0 or row['goles'] > 0: 
+                is_starter = (mins > 45) # Logica simple para MVP
+                
+                # Ajuste de tipos para Postgres
+                val_titular = bool(is_starter) if is_pg else (1 if is_starter else 0)
+                
+                batch_stats.append((
+                    match_id, 
+                    int(row['id']), # id_jugador
+                    mins,
+                    val_titular,
+                    int(row['goles']),
+                    int(row['goles_recibidos']) if 'goles_recibidos' in row else 0,
+                    int(row['amarillas']),
+                    int(row['rojas'])
+                ))
+
+        if batch_stats:
+            query_stats = f"""
+                INSERT INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, goles_marcados, goles_recibidos, amarillas, rojas)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            """
+            c.executemany(query_stats, batch_stats)
+            
+        conn.commit()
+        # Invalidar cache de Streamlit para que se refresquen los datos
+        st.cache_data.clear()
+        
+        return True, f"Partido guardado con ID {match_id}"
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error guardando partido: {e}"
+    finally:
+        conn.close()
