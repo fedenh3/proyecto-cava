@@ -2,42 +2,118 @@ import streamlit as st
 import pandas as pd
 import cava_functions as cf
 import altair as alt
+import os
 
-# Configuración inicial de la página (Título e ícono)
+# --- INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS (PARA CLOUD) ---
+# Verificamos si la base de datos existe y tiene datos. Si no, corremos el ETL.
+from db_config import get_connection, is_postgres
+
+DB_FILE = "cava_stats_v2.db"
+
+def check_db_integrity():
+    """
+    Verifica si la base de datos ya está inicializada (tablas creadas).
+    Soporta tanto SQLite local como Postgres en la nube.
+    """
+    conn = get_connection()
+    if not conn: 
+        # Si no hay conexión (ni local file ni cloud creds), retornamos False
+        return False
+        
+    try:
+        c = conn.cursor()
+        # Verificamos si hay DATOS en la tabla más importante (stats)
+        c.execute("SELECT count(*) FROM stats")
+        count = c.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception as e:
+        # Si falla (ej: tabla no existe), asumimos que hay que inicializar
+        return False
+
+if not check_db_integrity():
+    st.info("👋 ¡Bienvenido a CAVA Stats!")
+    
+    excel_file = "Estadísticas CAVA_v3_original.xlsx"
+    
+    # Si el archivo NO existe localmente, pedimos que lo suban
+    if not os.path.exists(excel_file):
+        st.warning(f"⚠️ No se encontró el archivo '{excel_file}'.")
+        st.write("Para inicializar la base de datos en la nube, por favor sube el Excel original aquí:")
+        
+        uploaded_file = st.file_uploader("Subir Excel", type=["xlsx"])
+        
+        if uploaded_file is not None:
+            # Guardamos el archivo subido con el nombre esperado
+            with open(excel_file, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.success("✅ Archivo subido con éxito. Procesando...")
+            st.rerun()
+        else:
+            st.stop() # Detenemos la ejecución hasta que suban el archivo
+
+    # Si el archivo YA existe (o se acaba de subir), inicializamos la DB
+    with st.spinner("🚀 Inicializando motor de base de datos..."):
+        from db_init import init_db
+        from etl_process import main as run_etl
+        
+        init_db()
+        run_etl()
+    
+    st.success("✅ ¡Todo listo! Cargando dashboard...")
+    st.rerun()
+
+import admin_module as admin
+
+# ==============================================================================
+# CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO)
+# ==============================================================================
 st.set_page_config(page_title="CAVA Stats", page_icon="⚽", layout="wide")
 
-# Diseño estético (CSS) para una interfaz minimalista y profesional
+import admin_module as admin
+
+# Diseño estético (CSS)
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
-    .stMetric {
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
+    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        font-weight: 600;
-    }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
+# ==============================================================================
+# MODO DE NAVEGACIÓN
+# ==============================================================================
+view_mode = st.sidebar.radio("Vista", ["📊 Dashboard Público", "⚙️ Administración"])
+
+if view_mode == "⚙️ Administración":
+    admin.main()
+    st.stop()
+
+# ==============================================================================
+# DASHBOARD PÚBLICO
+# ==============================================================================
 st.title("⚽ CAVA - Sistema de Estadísticas")
 
-# Cargamos los datos básicos desde la lógica de la base de datos
+# Cargamos los datos básicos
 df_torneos = cf.load_torneos()
 df_jugadores = cf.load_jugadores()
-temporadas = ["Todas"] + sorted(df_torneos['temporada'].unique().tolist(), reverse=True)
 
-# BARRA LATERAL (Filtros globales para toda la App)
+if df_torneos.empty:
+    st.warning("No hay datos de torneos disponibles.")
+    temporadas = ["Todas"]
+else:
+    temporadas = ["Todas"] + sorted(df_torneos['temporada'].unique().tolist(), reverse=True)
+
+# BARRA LATERAL (Filtros)
 with st.sidebar:
     st.header("Filtros")
     sel_temp = st.selectbox("Temporada", temporadas)
     
-    if sel_temp == "Todas":
+    if df_torneos.empty:
+        torneos_list = ["Todos"]
+    elif sel_temp == "Todas":
         torneos_list = ["Todos"] + df_torneos['nombre'].unique().tolist()
     else:
         torneos_list = ["Todos"] + df_torneos[df_torneos['temporada'] == sel_temp]['nombre'].tolist()
@@ -56,7 +132,7 @@ with tab0:
     # Obtenemos las métricas globales filtradas
     tid = None
     if sel_torneo != "Todos":
-        tid = df_torneos[df_torneos['nombre'] == sel_torneo]['id'].iloc[0]
+        tid = int(df_torneos[df_torneos['nombre'] == sel_torneo]['id'].iloc[0])
         
     g_stats = cf.get_global_stats(torneo_id=tid, temporada=sel_temp)
     
