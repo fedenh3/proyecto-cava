@@ -1,0 +1,62 @@
+DOCUMENTACIÓN TÉCNICA - PROYECTO CAVA (Versión Auditada)
+
+1. ESTRUCTURA DEL PROYECTO
+==========================
+
+El proyecto ha sido refactorizado para seguir un patrón modular y profesional, separando la interfaz visual de la lógica de datos.
+
+* app.py (Interfaz de Usuario): Es el "Frontend". Solo se encarga de mostrar botones, gráficos y tablas usando Streamlit. No escribe SQL directamente.
+* cava_functions.py (Lógica de Negocio): Es el "Backend". Contiene todas las funciones Python que hablan con la base de datos.
+* db_config.py (Configuración DB): Maneja la conexión a la base de datos "cava_stats_v2.db".
+* cava_schema.sql (Esquema SQL): Archivo DEFINITIVO con el diseño "Auditado" (3FN estricta).
+* etl_process.py (Carga Masiva): Script de "Extracción, Transformación y Carga". Lee el Excel "Estadísticas CAVA_v2_original.xlsx" y llena la base de datos.
+* db_init.py (Inicializador): Script simple que borra/crea la base de datos vacía leyendo el esquema SQL.
+
+--------------------------------------------------------------------------------
+
+2. BASE DE DATOS Y TABLAS (AUDITORÍA "STRICT 3FN")
+==================================================
+
+La base de datos actual es "cava_stats_v2.db". 
+Se han corregido los "malos enlaces" detectados, habilitando Foreign Keys reales y restricciones de unicidad.
+
+DETALLE DE TABLAS Y REGLAS DE INTEGRIDAD
+----------------------------------------
+
+1. TABLA: torneos
+   - Regla: No puede haber dos torneos con el mismo nombre en la misma temporada.
+   - Restricción: UNIQUE(nombre, temporada).
+
+2. TABLA: rivales
+   - Regla: Nombres únicos y no vacíos.
+
+3. TABLAS: arbitros y tecnicos
+   - Se extraen automáticamente del Excel. Evitan duplicidad de texto en partidos.
+
+4. TABLA: partidos (Tabla de Hechos)
+   - Claves Foráneas (FK) REFORZADAS:
+       * id_torneo  -> REFERENCIA torneos(id)
+       * id_rival   -> REFERENCIA rivales(id)
+       * id_arbitro -> REFERENCIA arbitros(id)
+       * id_tecnico -> REFERENCIA tecnicos(id)
+   - Regla de Negocio: No se permite cargar el mismo partido (mismo rival, fecha y torneo) dos veces.
+   - Restricción: UNIQUE(fecha, id_rival, id_torneo).
+
+5. TABLA: presencias (Tabla Intermedia)
+   - CORRECCIÓN IMPORTANTE: Antes tenía un ID autoincremental simple. Ahora usa una CLAVE PRIMARIA COMPUESTA.
+   - PK: (id_partido, id_jugador).
+   - Significado: Es físicamente imposible que un jugador aparezca dos veces en la planilla del mismo partido.
+   - FKs con eliminación en cascada: Si borras el partido, se borran las presencias.
+
+--------------------------------------------------------------------------------
+
+3. CÓMO USARLO
+==============
+
+Para cargar los datos desde cero (con el Excel Auditado):
+   1. Asegúrate que "Estadísticas CAVA_v2_original.xlsx" esté en la carpeta.
+   2. Ejecuta: python db_init.py (Resetea la base 100%)
+   3. Ejecuta: python etl_process.py (Carga todo)
+
+Para ver la App:
+   - Ejecuta: streamlit run app.py

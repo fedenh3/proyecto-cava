@@ -1,0 +1,53 @@
+INFORME FINAL DEL PROYECTO: SISTEMA DE ESTADÍSTICAS C.A.V.A.
+Fecha: 05 de Enero de 2026
+Realizado por: Antigravity (Asistente de IA)
+
+--------------------------------------------------------------------------------
+1. RESUMEN DEL TRABAJO (AUDITORÍA Y REINGENIERÍA)
+--------------------------------------------------------------------------------
+Se ha completado la reingeniería total del proyecto. La aplicación ha pasado de ser un prototipo basado en scripts a una arquitectura modular de grado profesional, siguiendo el estándar de 3ra Forma Normal (3FN) y una clara separación de responsabilidades.
+
+2. TECNOLOGÍAS Y ARQUITECTURA
+--------------------------------------------------------------------------------
+*   Base de Datos: SQLite (Archivo 'cava_stats_v2.db' con Integrity Checks activados).
+*   Esquema SQL: Implementado en 'cava_schema.sql' con Claves Primarias Compuestas y Relaciones Foráneas.
+*   Estructura de Código:
+    *   `db_config.py`: Gestión centralizada de conexiones.
+    *   `cava_functions.py`: Capa de servicios/funciones de datos (Backend).
+    *   `app.py`: Interfaz de usuario pura (Frontend).
+    *   `etl_process.py`: Motor de migración auditado.
+
+3. LOGROS DE LA AUDITORÍA DE DATOS
+--------------------------------------------------------------------------------
+A. Normalización Estricta (3FN)
+   - Se crearon tablas independientes para Árbitros y Técnicos, eliminando la duplicación de texto en la tabla de Partidos.
+   - Se implementó una Clave Primaria Compuesta en 'presencias' (id_partido, id_jugador), garantizando que no existan duplicados lógicos.
+
+B. Integridad Referencial
+   - Se configuraron reglas de eliminación en cascada (ON DELETE CASCADE) para que la limpieza de datos sea segura y automática.
+   - Se agregaron restricciones de unicidad en Partidos para evitar la duplicación de registros históricos.
+
+C. Extracción de Datos Enriquecida
+   - El nuevo ETL ahora parsea dinámicamente los nombres de Árbitros y DTs desde las cabeceras del Excel, datos que anteriormente se perdían.
+
+4. PRÓXIMOS PASOS
+--------------------------------------------------------------------------------
+A. Validación Final
+   - Revisar en la App que todos los partidos cargados muestran ahora su Árbitro y DT correspondiente cuando el dato está disponible en el Excel.
+
+B. Mantenimiento de la Base de Datos
+   - Se recomienda utilizar la aplicación para las cargas futuras, delegando el Excel a una función de "Backup histórico".
+
+C. Expansión
+   - La arquitectura modular permite ahora añadir nuevas funciones (como estadísticas por DT o rendimiento por Árbitro) con un esfuerzo mínimo en el archivo 'cava_functions.py'.
+
+--------------------------------------------------------------------------------
+ARCHIVOS FINALES ENTREGADOS
+--------------------------------------------------------------------------------
+1. `cava_stats_v2.db`: Base de datos definitiva y auditada.
+2. `cava_schema.sql`: Diseño estructural del sistema.
+3. `cava_functions.py`: Capa de lógica de datos.
+4. `app.py`: Aplicación visual Streamlit.
+5. `etl_process.py`: Motor de carga (Excel -> DB).
+6. `db_init.py`: Inicializador de sistema.
+7. `DOCUMENTACION_TECNICA.txt`: Manual de usuario y técnico.
