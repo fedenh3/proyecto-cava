@@ -1,0 +1,47 @@
+# PLAN DE PROYECTO: SISTEMA DE ESTADÍSTICAS C.A.V.A. (Actualizado 05/01/2026)
+
+## 1. OBJETIVO
+Migrar la información histórica del Club Atlético Victoriano Arenas a una base de datos relacional robusta (3FN) y modularizar el código para seguir estándares de ingeniería de software profesionales.
+
+## 2. TECNOLOGÍAS Y ARQUITECTURA MODULAR
+Hemos pasado de un script único a una estructura robusta:
+
+*   **Lenguaje:** Python 3.10+
+*   **Base de Datos:** SQLite (cava_stats_v2.db)
+*   **Diseño de Datos:** `cava_schema.sql` (Esquema SQL independiente para auditoría).
+*   **Capa de Conexión:** `db_config.py` (Manejo de PRAGMAs y conexiones).
+*   **Capa de Lógica:** `cava_functions.py` (Funciones CRUD separadas de la UI).
+*   **Capa de UI:** `app.py` (Streamlit limpio, solo visualización).
+
+## 3. MODELO DE DATOS PROFESIONAL (3FN)
+Se auditó y mejoró el modelo para garantizar integridad:
+1.  **Tablas Normalizadas:** `torneos`, `rivales`, `arbitros`, `tecnicos`.
+2.  **Integridad:** Claves foráneas (FK) con eliminación en cascada.
+3.  **Unicidad:** `presencias` usa Clave Primaria Compuesta (Partido + Jugador) para evitar duplicados imposibles.
+4.  **Validación de Negocio:** Unicidad en `partidos` por fecha/rival/torneo.
+
+## 4. ESTADO DE LAS FASES
+
+### FASE 1: ETL y Auditoría (COMPLETADO)
+*   Carga automática desde "Estadísticas CAVA_v2_original.xlsx".
+*   Extracción automática de nombres de Árbitros y DTs desde las cabeceras del Excel.
+*   Limpieza y normalización de datos históricos.
+
+### FASE 2: Desarrollo de la App Modular (COMPLETADO)
+*   Interfaz Streamlit interactiva con filtros dinámicos.
+*   Páginas de Historial y Detalle de Jugador.
+*   Separación total de la lógica SQL en archivos independientes.
+
+### FASE 3: Gestión y Mantenimiento (EN CURSO)
+*   **Carga Manual:** Implementado el formulario para guardar partidos directamente desde la App.
+*   **Gestión DB:** Recomendado uso de DB Browser para SQLite.
+
+## 5. CÓMO VOLVER A EMPEZAR (RESET TOTAL)
+Si quieres borrar todo y cargar de nuevo desde el Excel actualizado:
+1.  Eliminar `cava_stats_v2.db`.
+2.  Ejecutar `python db_init.py` (Crea tablas vacías).
+3.  Ejecutar `python etl_process.py` (Carga datos del Excel).
+4.  Ejecutar `streamlit run app.py`.
+
+---
+*Este archivo sirve como guía maestra para el desarrollo del Proyecto CAVA.*

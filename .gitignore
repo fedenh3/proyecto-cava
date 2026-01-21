@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.streamlit/
+Versiones anteriores de Excel/
+*.xlsx
+*.xls
+*.db
+cava_stats_v2.db

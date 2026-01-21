@@ -1,0 +1,62 @@
+========================================================================
+RESUMEN DEL PROYECTO: CAVA STATS - BASE DE DATOS Y PROCESO ETL
+========================================================================
+
+Este documento resume la arquitectura actual del sistema de estadísticas del
+Club Atlético Victoriano Arenas (CAVA), basada en el archivo Excel V3.
+
+------------------------------------------------------------------------
+1. ARQUITECTURA DE LA BASE DE DATOS (SQLITE)
+------------------------------------------------------------------------
+La base de datos está diseñada de forma Relacional. Esto significa que la
+información no vive en una sola tabla gigante, sino que está separada para
+evitar errores y permitir filtros complejos en la App.
+
+TABLAS PRINCIPALES:
+- JUGADORES: La "ficha" de cada jugador. Contiene su ID (J001, etc.), 
+  nombre, apellido, puesto, comentarios de Guido Franck y sus datos de debut.
+- PARTIDOS: El registro de cada encuentro. Guarda el rival, el torneo, 
+  el resultado, el DT, el Árbitro y detalles textuales de goles y penales.
+- STATS: Es la tabla "puente". Une a un jugador con un partido. Aquí se 
+  guarda cuántos minutos jugó ese día y cuántos goles hizo específicamente.
+- MAESTRAS (Posiciones, Rivales, Torneos, Técnicos, Árbitros): Listas únicas
+  que aseguran que no haya nombres repetidos o mal escritos.
+
+------------------------------------------------------------------------
+2. CÓMO FUNCIONA EL SISTEMA (EL FLUJO)
+------------------------------------------------------------------------
+1. ORIGEN: Todo nace en tu archivo "Estadísticas CAVA_v3_original.xlsx".
+2. PROCESO ETL (Script Python):
+   - Limpia la base de datos vieja.
+   - Lee los jugadores y sus historias previas.
+   - Lee los resultados y crea los partidos.
+   - Lee los planteles anuales para saber quién estuvo presente.
+   - ANALIZADOR DE TEXTO: Lee la columna de goles (ej: "Coselli (x2)") y 
+     asigna esos goles automáticamente al jugador correcto en el partido.
+3. APP STREAMLIT: Consulta la base de datos y muestra gráficos, tablas
+   y fichas individuales sumando el detalle histórico con lo nuevo.
+
+------------------------------------------------------------------------
+3. ESTADO ACTUAL DE LOS DATOS
+------------------------------------------------------------------------
+- Total Jugadores: 153
+- Total Partidos: 253 (127 Local / 126 Visitante)
+- Torneos Identificados: 2018/2019, 2019/2020, Transición 2020, etc.
+- Goleadores Detallados: Cargados mediante motor de búsqueda por texto.
+- Efectividad de DTs: Calculada dinámicamente basada en puntos (PG: 3, PE: 1).
+
+------------------------------------------------------------------------
+4. NOVEDADES DE ESTA VERSIÓN
+------------------------------------------------------------------------
+- DOCUMENTACIÓN BILINGÜE: Todo el código fuente (`.py`) y el diseño de la 
+  base de datos (`.sql`) ahora contienen comentarios explicativos en 
+  español para que puedas entender cada paso del proceso.
+- ANÁLISIS DE RENDIMIENTO: La App ahora muestra una tabla de efectividad 
+  para los Directores Técnicos, comparando quién obtuvo mejores resultados 
+  según los partidos dirigidos.
+- CALIDAD DE DATOS: Se corrigió la condición de Local/Visitante y se 
+  vinculó el detalle de los penales para un análisis profundo de arqueros.
+
+========================================================================
+FIN DEL RESUMEN
+========================================================================

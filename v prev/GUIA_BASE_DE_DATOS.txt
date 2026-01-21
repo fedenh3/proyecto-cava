@@ -1,0 +1,81 @@
+================================================================================
+GUIA TECNICA: ESTRUCTURA Y MANTENIMIENTO DE BASE DE DATOS (CAVA)
+================================================================================
+
+Este documento detalla el diseño de tu base de datos y cómo gestionarla paso a paso.
+
+1. MAPA DE RELACIONES (DIAGRAMA)
+================================
+
+    +------------+       +------------+       +------------+
+    |  TECNICOS  |       |  TORNEOS   |       |  ARBITROS  |
+    +------------+       +------------+       +------------+
+          |                    |                    |
+          | (1)                | (1)                | (1)
+          |                    |                    |
+          |           (M)      |      (M)           |
+          +---------------->+---------+<------------+
+                            | PARTIDOS|
+                            +---------+
+                                 | (1)
+          +-------------+        |
+          |  JUGADORES  |<-------+  (M)
+          +-------------+        |
+                 | (1)           |
+                 |               |
+                 | (M)           | (M)
+          +----------------------+
+          |        STATS         | (Tabla Central de Estadísticas)
+          +----------------------+
+
+(1) = Uno  |  (M) = Muchos
+
+
+2. DETALLE DE LAS TABLAS (Atomicidad y 3FN)
+===========================================
+
+A. [torneos] - Dimension de competicion
+   - id (INT, PK): Identificador unico.
+   - nombre / temporada (TEXT).
+
+B. [rivales] - Listado de oponentes
+   - id (INT, PK)
+   - nombre (TEXT): Nombre del club rival (Unique).
+
+C. [arbitros] / [tecnicos]
+   - id (INT, PK)
+   - nombre (TEXT)
+
+D. [jugadores] - Fichas del plantel
+   - id (INT, PK)
+   - nombre / apellido / posicion (TEXT)
+   - goles_iniciales (INT): Goles historicos.
+
+E. [partidos] - Hechos del encuentro
+   - id (INT, PK)
+   - fecha (DATE)
+   - id_torneo / id_rival / id_arbitro / id_tecnico (FKs)
+   - condicion (TEXT): 'L', 'V', 'N'.
+   - goles_favor / goles_contra (INT).
+
+F. [stats] - Estadistica Atomica (EX-Presencias)
+   - id_partido / id_jugador (FKs y PK Compuesta).
+   - es_titular (BOOL)
+   - minutos_jugados (INT)
+   - goles_marcados (INT): Goles a favor.
+   - goles_recibidos (INT): Goles concedidos (Para ARQ).
+   - asistencias (INT): Pases gol.
+   - amarillas / rojas (INT).
+
+
+3. MANUAL DE MODIFICACIONES
+===========================
+
+PASO 1: Archivo [cava_schema.sql] -> Modificar estructura global.
+PASO 2: Ejecutar [db_init.py] -> Aplicar cambios (borra datos).
+PASO 3: Archivo [cava_functions.py] -> Actualizar consultas SELECT/INSERT.
+PASO 4: Archivo [app.py] -> Mostrar el nuevo dato en Streamlit.
+
+--------------------------------------------------------------------------------
+GUIA ACTUALIZADA AL 05/01/2026 - SISTEMA AUDITADO CON TABLA 'STATS'
+--------------------------------------------------------------------------------

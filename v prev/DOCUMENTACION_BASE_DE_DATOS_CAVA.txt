@@ -1,0 +1,156 @@
+========================================================================
+DOCUMENTACIÓN TÉCNICA: ESTRUCTURA Y CONVERSIÓN DE BASE DE DATOS CAVA
+========================================================================
+
+Este documento resume el diseño de la base de datos para el proyecto CAVA Stats,
+la lógica de conversión desde el Excel V3 y el código SQL para recrearla.
+
+------------------------------------------------------------------------
+1. FILOSOFÍA DEL DISEÑO
+------------------------------------------------------------------------
+El sistema ha sido diseñado bajo el modelo Relacional (Normalizado).
+Esto significa que en lugar de tener hojas de cálculo gigantes con celdas 
+combinadas, la información se divide en "Tablas Maestras" (Dimensiones) 
+y "Tablas de Hechos" (Transacciones).
+
+- CRECIMIENTO VERTICAL: El sistema crece hacia abajo (más filas), no hacia 
+  la derecha (más columnas).
+- INTEGRIDAD: Al usar IDs, evitamos que un error de ortografía en el Excel 
+  cree un jugador o rival duplicado.
+- CÁLCULO AUTOMÁTICO: Las estadísticas totales no se escriben, se calculan 
+  sumando el detalle de cada partido.
+
+------------------------------------------------------------------------
+2. DICCIONARIO DE TABLAS
+------------------------------------------------------------------------
+
+[MAESTRAS]
+- posiciones: Lista de puestos (ARQ, DEF, VOL, DEL).
+- rivales: Listado único de clubes contra los que se jugó.
+- torneos: Nombre del torneo y la temporada (ej: "Apertura", "2024").
+- arbitros / tecnicos: Listados únicos de personal.
+- usuarios: Para el acceso al sistema de administración.
+
+[ENTIDADES]
+- jugadores: Contiene la ficha del jugador, hitos de debut y el 
+  "Saldo Inicial" (Estadísticas históricas cargadas desde el Excel).
+
+[HECHOS]
+- partidos: Registra el evento (Fecha, Rival, Torneo, Goles del equipo).
+- stats: Registra el rendimiento INDIVIDUAL (Minutos, Goles marcados, 
+  Goles recibidos, Tarjetas) de un JUGADOR en un PARTIDO específico.
+
+------------------------------------------------------------------------
+3. SCRIPT SQL PARA SQL SERVER (MANAGEMENT STUDIO - SSMS)
+------------------------------------------------------------------------
+A continuación se presenta el script adaptado a T-SQL para correr en 
+Microsoft SQL Server Management Studio.
+
+/* 
+   Nota: En SQL Server el tipo IDENTITY reemplaza al AUTOINCREMENT de SQLite 
+   y el tipo BIT reemplaza al BOOLEAN.
+*/
+
+-- Crear Tablas Maestras
+CREATE TABLE posiciones (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE rivales (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE torneos (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL,
+    temporada NVARCHAR(20) NOT NULL,
+    CONSTRAINT UQ_Torneo UNIQUE(nombre, temporada)
+);
+
+CREATE TABLE arbitros (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE tecnicos (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE
+);
+
+-- Crear Tabla de Jugadores
+CREATE TABLE jugadores (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    id_excel NVARCHAR(20) UNIQUE,
+    nombre NVARCHAR(100),
+    apellido NVARCHAR(100) NOT NULL,
+    id_posicion INT,
+    
+    -- Saldos Iniciales (Histórico del Excel)
+    pj_inicial INT DEFAULT 0,
+    goles_marcados_inicial INT DEFAULT 0,
+    goles_recibidos_inicial INT DEFAULT 0,
+    asistencias_inicial INT DEFAULT 0,
+    amarillas_inicial INT DEFAULT 0,
+    rojas_inicial INT DEFAULT 0,
+    titular_inicial INT DEFAULT 0,
+    suplente_inicial INT DEFAULT 0,
+    
+    -- Hitos de Debut
+    fecha_debut DATE,
+    rival_debut NVARCHAR(100),
+    resultado_debut NVARCHAR(20),
+    comentarios NVARCHAR(MAX),
+    
+    FOREIGN KEY (id_posicion) REFERENCES posiciones(id)
+);
+
+-- Crear Tabla de Partidos
+CREATE TABLE partidos (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    fecha DATE, 
+    id_torneo INT NOT NULL,
+    id_rival INT NOT NULL,
+    id_arbitro INT NULL, 
+    id_tecnico INT NULL, 
+    condicion CHAR(1) CHECK(condicion IN ('L', 'V', 'N')), 
+    goles_favor INT DEFAULT 0,
+    goles_contra INT DEFAULT 0,
+    
+    FOREIGN KEY (id_torneo) REFERENCES torneos(id),
+    FOREIGN KEY (id_rival) REFERENCES rivales(id),
+    FOREIGN KEY (id_arbitro) REFERENCES arbitros(id),
+    FOREIGN KEY (id_tecnico) REFERENCES tecnicos(id)
+);
+
+-- Crear Tabla de Estadísticas por Partido (STATS)
+CREATE TABLE stats (
+    id_partido INT NOT NULL,
+    id_jugador INT NOT NULL,
+    es_titular BIT DEFAULT 0,
+    minutos_jugados INT DEFAULT 0, 
+    goles_marcados INT DEFAULT 0,
+    goles_recibidos INT DEFAULT 0,
+    asistencias INT DEFAULT 0,
+    amarillas INT DEFAULT 0,
+    rojas INT DEFAULT 0,
+    
+    PRIMARY KEY (id_partido, id_jugador),
+    FOREIGN KEY (id_partido) REFERENCES partidos(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_jugador) REFERENCES jugadores(id) ON DELETE CASCADE
+);
+
+------------------------------------------------------------------------
+4. LÓGICA DEL PROCESO ETL (Excel -> Base de Datos)
+------------------------------------------------------------------------
+El script de Python `etl_process.py` sigue este flujo:
+1. Elimina datos existentes (reinicio limpio).
+2. Lee Hoja "Jugadores": Crea registros y guarda los "Saldos Iniciales".
+3. Lee Hoja "Resultados": Crea los Partidos, Rivales y Torneos.
+4. Lee Hojas "Plantel YYYY": Por cada encuentro (celda con 'X' o número), 
+   genera una fila en la tabla 'stats' vinculando al Jugador con el Partido.
+
+========================================================================
+FIN DEL DOCUMENTO
+========================================================================

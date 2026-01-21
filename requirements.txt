@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 streamlit
 pandas
 openpyxl
@@ -6,3 +7,13 @@ altair
 xlrd
 psycopg2-binary
 sqlalchemy
+=======
+streamlit
+pandas
+openpyxl
+altair
+# sqlite3 is standard library
+xlrd
+psycopg2-binary
+sqlalchemy
+>>>>>>> master

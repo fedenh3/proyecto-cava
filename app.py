@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
-import cava_functions as cf
 import altair as alt
 import os
 
-# --- INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS (PARA CLOUD) ---
-# Verificamos si la base de datos existe y tiene datos. Si no, corremos el ETL.
-from db_config import get_connection, is_postgres
+# ==============================================================================
+# CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO)
+# ==============================================================================
+st.set_page_config(page_title="CAVA Stats", page_icon="⚽", layout="wide")
+
+# Ahora sí importamos módulos que pueden usar st internamente
+import cava_functions as cf
+import admin_module as admin
+from db_config import get_connection, is_postgres, close_connection
 
 DB_FILE = "cava_stats_v2.db"
 
@@ -25,12 +30,13 @@ def check_db_integrity():
         # Verificamos si hay DATOS en la tabla más importante (stats)
         c.execute("SELECT count(*) FROM stats")
         count = c.fetchone()[0]
-        conn.close()
+        close_connection(conn)
         return count > 0
     except Exception as e:
         # Si falla (ej: tabla no existe), asumimos que hay que inicializar
         return False
 
+# --- INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS (PARA CLOUD) ---
 if not check_db_integrity():
     st.info("👋 ¡Bienvenido a CAVA Stats!")
     
@@ -62,15 +68,6 @@ if not check_db_integrity():
     
     st.success("✅ ¡Todo listo! Cargando dashboard...")
     st.rerun()
-
-import admin_module as admin
-
-# ==============================================================================
-# CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO)
-# ==============================================================================
-st.set_page_config(page_title="CAVA Stats", page_icon="⚽", layout="wide")
-
-import admin_module as admin
 
 # Diseño estético (CSS)
 st.markdown("""

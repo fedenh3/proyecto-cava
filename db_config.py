@@ -30,29 +30,35 @@ def _get_cached_connection():
 
 def get_connection():
     """
-    Wrapper que gestiona la conexión cacheada.
-    Verifica si está cerrada y reconecta si es necesario.
+    Wrapper que gestiona la conexión cacheada con verificación de vida.
     """
     # 1. Intentar obtener conexión Postgres cacheada
     conn = _get_cached_connection()
     
-    # Si existe y está abierta, retornarla
-    if conn and not conn.closed:
-        return conn
-        
-    # Si está cerrada (o es None y falló cache), limpiamos cache y reintentamos
-    if conn and conn.closed:
-        st.cache_resource.clear()
-        conn = _get_cached_connection()
-        if conn and not conn.closed:
+    # Verificación de vida (Test query)
+    if conn:
+        try:
+            # Si está cerrada físicamente o el test falla, reconectamos
+            if conn.closed:
+                raise Exception("Conexión cerrada")
+            
+            # Test rápido
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
             return conn
+        except:
+            # Si el test falla, limpiamos el caché y forzamos una nueva
+            st.cache_resource.clear()
+            conn = _get_cached_connection()
+            if conn: return conn
 
-    # 2. Fallback a SQLite (No cacheamos SQLite local porque es rápido)
+    # 2. Fallback a SQLite (No hay secretos o Postgres falló)
     try:
         conn = sqlite3.connect(DB_NAME)
         return conn
     except Exception as e:
-        print(f"Error conectando a SQLite: {e}")
+        st.error(f"Error fatal de base de datos: {e}")
         return None
 
 def is_postgres(conn):
@@ -106,9 +112,6 @@ def init_db():
                 # SQLite tiene executescript
                 conn.executescript(script)
                 
-            print("✅ Base de datos inicializada correctamente.")
-        except Exception as e:
-            print(f"Error inicializando la estructura: {e}")
             print("✅ Base de datos inicializada correctamente.")
         except Exception as e:
             print(f"Error inicializando la estructura: {e}")
