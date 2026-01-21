@@ -459,3 +459,209 @@ def save_match(match_data, df_stats):
         return False, f"Error guardando partido: {e}"
     finally:
         conn.close()
+
+# ==============================================================================
+# FUNCIONES CRUD - GESTIÓN DE DATOS (ADMIN)
+# ==============================================================================
+
+def load_tecnicos():
+    """Carga lista de todos los técnicos."""
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql("SELECT * FROM tecnicos ORDER BY nombre", conn)
+    finally:
+        close_connection(conn)
+
+def load_posiciones():
+    """Carga lista de todas las posiciones."""
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql("SELECT * FROM posiciones ORDER BY nombre", conn)
+    finally:
+        close_connection(conn)
+
+# --- TORNEOS ---
+def create_torneo(nombre, temporada):
+    """Crea un nuevo torneo."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM torneos WHERE nombre = {ph} AND temporada = {ph}", (nombre, temporada))
+        if c.fetchone():
+            return False, f"El torneo '{nombre}' ya existe para la temporada {temporada}"
+        
+        c.execute(f"INSERT INTO torneos (nombre, temporada) VALUES ({ph}, {ph})", (nombre, temporada))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Torneo '{nombre}' ({temporada}) creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+# --- RIVALES ---
+def create_rival(nombre):
+    """Crea un nuevo rival/equipo."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM rivales WHERE UPPER(nombre) = UPPER({ph})", (nombre,))
+        if c.fetchone():
+            return False, f"El rival '{nombre}' ya existe"
+        
+        c.execute(f"INSERT INTO rivales (nombre) VALUES ({ph})", (nombre,))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Rival '{nombre}' creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+# --- TÉCNICOS ---
+def create_tecnico(nombre):
+    """Crea un nuevo director técnico."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM tecnicos WHERE UPPER(nombre) = UPPER({ph})", (nombre,))
+        if c.fetchone():
+            return False, f"El técnico '{nombre}' ya existe"
+        
+        c.execute(f"INSERT INTO tecnicos (nombre) VALUES ({ph})", (nombre,))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Técnico '{nombre}' creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+# --- POSICIONES ---
+def create_posicion(nombre):
+    """Crea una nueva posición de jugador."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM posiciones WHERE UPPER(nombre) = UPPER({ph})", (nombre,))
+        if c.fetchone():
+            return False, f"La posición '{nombre}' ya existe"
+        
+        c.execute(f"INSERT INTO posiciones (nombre) VALUES ({ph})", (nombre,))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Posición '{nombre}' creada exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+# --- JUGADORES ---
+def create_jugador(nombre, apellido, id_posicion=None, comentarios=None):
+    """Crea un nuevo jugador en el plantel."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM jugadores WHERE UPPER(nombre) = UPPER({ph}) AND UPPER(apellido) = UPPER({ph})", 
+                  (nombre, apellido))
+        if c.fetchone():
+            return False, f"El jugador '{nombre} {apellido}' ya existe"
+        
+        c.execute(f"""
+            INSERT INTO jugadores (nombre, apellido, id_posicion, comentarios_gf) 
+            VALUES ({ph}, {ph}, {ph}, {ph})
+        """, (nombre, apellido, id_posicion, comentarios))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Jugador '{nombre} {apellido}' creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+def update_jugador(jugador_id, nombre=None, apellido=None, id_posicion=None, comentarios=None):
+    """Actualiza datos de un jugador existente."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        updates = []
+        params = []
+        
+        if nombre is not None:
+            updates.append(f"nombre = {ph}")
+            params.append(nombre)
+        if apellido is not None:
+            updates.append(f"apellido = {ph}")
+            params.append(apellido)
+        if id_posicion is not None:
+            updates.append(f"id_posicion = {ph}")
+            params.append(id_posicion)
+        if comentarios is not None:
+            updates.append(f"comentarios_gf = {ph}")
+            params.append(comentarios)
+        
+        if not updates:
+            return False, "No hay cambios para guardar"
+        
+        params.append(jugador_id)
+        query = f"UPDATE jugadores SET {', '.join(updates)} WHERE id = {ph}"
+        c.execute(query, params)
+        conn.commit()
+        st.cache_data.clear()
+        return True, "Jugador actualizado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+
+def delete_jugador(jugador_id):
+    """Elimina un jugador (cuidado: también elimina sus estadísticas)."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Primero eliminamos sus stats (por si no hay CASCADE)
+        c.execute(f"DELETE FROM stats WHERE id_jugador = {ph}", (jugador_id,))
+        c.execute(f"DELETE FROM jugadores WHERE id = {ph}", (jugador_id,))
+        conn.commit()
+        st.cache_data.clear()
+        return True, "Jugador eliminado"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
+    finally:
+        close_connection(conn)
+

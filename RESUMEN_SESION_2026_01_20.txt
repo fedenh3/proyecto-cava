@@ -1,0 +1,90 @@
+# ============================================================
+# RESUMEN DE TRABAJO: CAVA STATS
+# Fecha: 20 de Enero 2026
+# ============================================================
+
+## AUDITORÍA TÉCNICA REALIZADA
+
+Se revisaron todos los archivos del proyecto:
+- app.py (309 líneas) - Interfaz Streamlit
+- cava_functions.py (462 líneas) - Lógica de negocio
+- etl_process.py (405 líneas) - Migración de datos
+- db_config.py (132 líneas) - Conexión a base de datos
+- admin_module.py (163 líneas) - Panel de administración
+
+### Clasificación del proyecto: MVP (Producto Mínimo Viable)
+
+### Lo que está bien:
+- Arquitectura con buena separación de responsabilidades
+- Abstracción SQLite/Postgres funcional
+- Esquema de base de datos bien normalizado
+- Uso correcto de caching de Streamlit
+
+### Bugs identificados y corregidos:
+1. db_config.py - Bloque "except" duplicado (error de sintaxis)
+2. app.py - set_page_config no estaba al inicio
+3. app.py - Import duplicado de admin_module
+
+============================================================
+## PROBLEMA DE CONEXIÓN RESUELTO
+
+### Síntoma:
+La app mostraba "pandas.errors.DatabaseError" al intentar cargar datos.
+
+### Causa:
+Supabase cambió su política de IPv4. La conexión directa (puerto 5432)
+ya no es compatible con IPv4, que es lo que usa Streamlit Cloud.
+
+### Solución:
+Se actualizaron los Secrets de Streamlit Cloud para usar Transaction Pooler:
+
+[supabase]
+host = "aws-1-us-east-2.pooler.supabase.com"
+dbname = "postgres"
+user = "postgres.ktjuphqujvwgswlmsdox"
+password = "threadosikali17"
+port = "6543"
+
+============================================================
+## CAMBIOS SUBIDOS A GITHUB
+
+Repositorio: https://github.com/fedenh3/proyecto-cava
+Commit: "Fix: db_config duplicated except block, app.py set_page_config order"
+
+Archivos modificados:
+- app.py
+- db_config.py
+- cava_functions.py
+
+============================================================
+## ESTADO ACTUAL
+
+✅ App funcionando: https://cava-stats.streamlit.app
+✅ Base de datos conectada (Supabase PostgreSQL)
+✅ Código limpio y pusheado a GitHub
+
+============================================================
+## PENDIENTES / MEJORAS FUTURAS
+
+1. Panel de Administración expandido:
+   - Ya existe básico en admin_module.py
+   - Falta: CRUD completo de jugadores, edición de partidos, gestión de torneos
+
+2. Seguridad:
+   - Hashear contraseñas (actualmente en texto plano)
+   - Implementar autenticación más robusta
+
+3. Multi-tenancy (para vender a otros clubes):
+   - Agregar columna id_club a todas las tablas
+   - Implementar Row Level Security en Postgres
+
+============================================================
+## CREDENCIALES IMPORTANTES (NO COMPARTIR)
+
+Supabase Dashboard: https://supabase.com (proyecto: cava-stats)
+Streamlit Cloud: https://share.streamlit.io
+GitHub: https://github.com/fedenh3/proyecto-cava
+
+Usuario admin de la app: admin / cava2024
+
+============================================================
