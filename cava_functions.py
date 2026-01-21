@@ -1,7 +1,7 @@
 import sqlite3
 import pandas as pd
 import streamlit as st
-from db_config import get_connection, get_placeholder
+from db_config import get_connection, get_placeholder, close_connection
 
 def load_torneos():
     """
@@ -13,7 +13,7 @@ def load_torneos():
     try:
         return pd.read_sql("SELECT * FROM torneos ORDER BY temporada DESC, nombre", conn)
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_partidos(torneo_id=None):
@@ -39,7 +39,7 @@ def load_partidos(torneo_id=None):
         # Para read_sql con psycopg2, a veces es mejor pasar params vacíos si no se usan
         return pd.read_sql(query, conn)
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_jugadores():
@@ -57,7 +57,7 @@ def load_jugadores():
         """
         return pd.read_sql(query, conn)
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_rivales():
@@ -69,7 +69,7 @@ def load_rivales():
     try:
         return pd.read_sql("SELECT * FROM rivales ORDER BY nombre", conn)
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_player_stats(jugador_id):
@@ -113,7 +113,7 @@ def get_player_stats(jugador_id):
         
         return pd.DataFrame([res])
     finally:
-        conn.close()
+        close_connection(conn)
 
 def get_player_matches(jugador_id):
     """
@@ -136,7 +136,7 @@ def get_player_matches(jugador_id):
         """
         return pd.read_sql(query, conn, params=(jugador_id,))
     finally:
-        conn.close()
+        close_connection(conn)
 
 def login_user(username, password):
     """
@@ -157,7 +157,7 @@ def login_user(username, password):
             'nombre': user[4]
         }
     finally:
-        conn.close()
+        close_connection(conn)
 
 # ========================================
 # FUNCIONES DE ANALÍTICA PARA EL DASHBOARD
@@ -193,7 +193,7 @@ def get_global_stats(torneo_id=None, temporada=None):
         
         return {"pj":pj, "pg":pg, "pe":pe, "pp":pp, "gf":gf, "gc":gc}
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_top_stat(stat_col="goles_marcados", limit=10, sum_initial=True, torneo_id=None, temporada=None):
@@ -235,7 +235,7 @@ def get_top_stat(stat_col="goles_marcados", limit=10, sum_initial=True, torneo_i
         params.append(limit)
         return pd.read_sql(query, conn, params=params)
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_dt_stats(torneo_id=None, temporada=None):
@@ -284,7 +284,7 @@ def get_dt_stats(torneo_id=None, temporada=None):
         
         return df.sort_values(by='Efectividad', ascending=False)
     finally:
-        conn.close()
+        close_connection(conn)
 
 def get_result_distribution(torneo_id=None, temporada=None):
     stats = get_global_stats(torneo_id, temporada)
@@ -331,7 +331,7 @@ def get_recent_form(limit=5, torneo_id=None, temporada=None):
             df = df.sort_values(by='nro_fecha') 
         return df
     finally:
-        conn.close()
+        close_connection(conn)
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_stats_against_rival(rival_id):
@@ -353,7 +353,7 @@ def get_stats_against_rival(rival_id):
             "gc": df['goles_contra'].sum()
         }
     finally:
-        conn.close()
+        close_connection(conn)
 
 # ==============================================================================
 # FUNCIONES DE ESCRITURA (ADMIN)
@@ -381,7 +381,7 @@ def create_user(username, password, nombre):
         conn.rollback()
         return False, f"Error DB: {e}"
     finally:
-        conn.close()
+        close_connection(conn)
 
 def save_match(match_data, df_stats):
     """
