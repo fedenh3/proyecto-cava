@@ -106,8 +106,14 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# Logo en la barra lateral
-st.sidebar.image(LOGO_FILE, width=200)
+# Logo en la barra lateral (con validación)
+if os.path.exists(LOGO_FILE):
+    try:
+        st.sidebar.image(LOGO_FILE, width=200)
+    except Exception:
+        st.sidebar.markdown("### ⚽ CAVA")
+else:
+    st.sidebar.markdown("### ⚽ CAVA")
 
 # ==============================================================================
 # MODO DE NAVEGACIÓN
@@ -121,10 +127,16 @@ if view_mode == "⚙️ Administración":
 # ==============================================================================
 # DASHBOARD PÚBLICO
 # ==============================================================================
-# Título con Logo
+# Título con Logo (con validación)
 col_title1, col_title2 = st.columns([1, 6])
 with col_title1:
-    st.image(LOGO_FILE, width=80)
+    if os.path.exists(LOGO_FILE):
+        try:
+            st.image(LOGO_FILE, width=80)
+        except Exception:
+            st.markdown("⚽")
+    else:
+        st.markdown("⚽")
 with col_title2:
     st.title("CAVA Stats - Inteligencia Deportiva")
 
