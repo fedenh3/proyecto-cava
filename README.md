@@ -6,35 +6,36 @@ Bienvenido a **CAVA Stats**, una plataforma integral de análisis estadístico p
 
 ## 🚀 Características Principales
 
-*   **📊 Dashboard de Análisis:** Métricas globales de campaña (PJ, PG, PE, PP, GF, GC).
-*   **👤 Fichas de Jugadores:** Historial detallado por jugador, incluyendo minutos jugados, goles, tarjetas y comentarios de análisis técnico.
-*   **👔 Efectividad de DTs:** Ranking dinámico de rendimiento por cuerpo técnico basado en puntos obtenidos.
-*   **🏟️ Historial por Rival:** Buscador histórico para conocer el historial completo contra cada club enfrentado.
-*   **⚖️ Motor ETL Inteligente:** Procesador de datos que automatiza la carga desde Excel, vinculando automáticamente goleadores y detalles de partidos.
+*   **📊 Dashboard de Análisis:** Métricas globales de campaña (PJ, PG, PE, PP, GF, GC), rachas y efectividad.
+*   **👤 Fichas de Jugadores:** Historial detallado por jugador, incluyendo minutos jugados, goles, tarjetas y comentarios técnicos.
+*   **👔 Efectividad de DTs:** Ranking dinámico de rendimiento por cuerpo técnico.
+*   **🏟️ Historial por Rival:** Buscador histórico para conocer el historial completo contra cada club.
+*   **🛠️ Panel de Administración:** Gestión completa de la temporada 2026 (carga de partidos, torneos, rivales y plantel).
+*   **⚖️ Motor ETL Inteligente:** Procesador de datos que automatiza la carga desde Excel vinculando automáticamente toda la información.
 
 ## 🛠️ Tecnología
 
 *   **Lenguaje:** Python 3.x
-*   **Interfaz:** [Streamlit](https://streamlit.io/) (Framework moderno para Apps de Datos)
-*   **Base de Datos:** SQLite3 (Motor relacional ligero y veloz)
-*   **Procesamiento:** Pandas & Regular Expressions (NLP básico para lectura de texto)
-*   **Visualización:** Altair Charts
+*   **Interfaz:** [Streamlit](https://streamlit.io/) (Framework moderno para Apps de Datos).
+*   **Base de Datos:** Soporte híbrido para **PostgreSQL** (Producción/Cloud) y **SQLite3** (Local).
+*   **Procesamiento:** Pandas & Regular Expressions para el motor ETL.
+*   **Visualización:** Altair Charts para gráficos interactivos.
 
 ## 📂 Estructura del Proyecto
 
-*   `app.py`: Interfaz de usuario y visualizaciones.
+*   `app.py`: Interfaz de usuario y visualizaciones principales.
+*   `admin_module.py`: Lógica del panel de administración y seguridad.
 *   `etl_process.py`: Motor de migración de datos Excel -> SQL.
 *   `cava_functions.py`: Lógica de negocios y consultas estadísticas.
-*   `cava_schema.sql`: Diseño de la arquitectura de la base de datos.
 *   `db_config.py` & `db_init.py`: Configuración e inicialización del entorno.
 
-## ⚙️ Instalación y Uso
+## ⚙️ Instalación y Uso Local
 
-1. Clonar el repositorio.
-2. Instalar dependencias: `pip install -r requirements.txt`.
-3. Inicializar base de datos: `python db_init.py`.
-4. Cargar datos desde el Excel: `python etl_process.py`.
-5. Ejecutar App: `streamlit run app.py`.
+1.  **Clonar el repositorio.**
+2.  **Instalar dependencias:** `pip install -r requirements.txt`.
+3.  **Configurar base de datos:** El sistema utiliza SQLite por defecto de forma local.
+4.  **Carga Inicial:** Por razones de privacidad, el archivo de Excel original no está incluido en el repositorio. Al ejecutar la app por primera vez, el sistema solicitará la carga del archivo `.xlsx` para inicializar la base de datos local.
+5.  **Ejecutar App:** `streamlit run app.py`.
 
 ---
 *Desarrollado para el análisis y seguimiento histórico del CAVA.*
