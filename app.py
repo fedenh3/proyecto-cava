@@ -69,7 +69,7 @@ if not check_db_integrity():
     st.success("✅ ¡Todo listo! Cargando dashboard...")
     st.rerun()
 
-LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Escudo_del_Club_Atl%C3%A9tico_Victoriano_Arenas.svg/1200px-Escudo_del_Club_Atl%C3%A9tico_Victoriano_Arenas.svg.png"
+LOGO_FILE = "images/cava_logo.png"
 
 # Diseño estético (CSS) - Colores del CAVA: Celeste (#75AADB) y Blanco
 st.markdown(f"""
@@ -107,7 +107,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Logo en la barra lateral
-st.sidebar.image(LOGO_URL, width=200)
+st.sidebar.image(LOGO_FILE, width=200)
 
 # ==============================================================================
 # MODO DE NAVEGACIÓN
@@ -124,7 +124,7 @@ if view_mode == "⚙️ Administración":
 # Título con Logo
 col_title1, col_title2 = st.columns([1, 6])
 with col_title1:
-    st.image(LOGO_URL, width=80)
+    st.image(LOGO_FILE, width=80)
 with col_title2:
     st.title("CAVA Stats - Inteligencia Deportiva")
 
