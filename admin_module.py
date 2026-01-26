@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import cava_functions as cf
-from db_migrations import run_migration_v4
+
 
 def login_form():
     st.markdown("### 🔒 Acceso Restringido")
@@ -378,13 +378,6 @@ def main():
             if 'base_players' in st.session_state:
                 del st.session_state['base_players']
             st.rerun()
-            
-        st.sidebar.divider()
-        if st.sidebar.button("⚠️ Actualizar DB (Migración v4)"):
-            with st.spinner("Actualizando esquema..."):
-                ok, msg = run_migration_v4()
-                if ok: st.sidebar.success(msg)
-                else: st.sidebar.error(msg)
             
         if opt == "📝 Cargar Partido":
             render_match_loader()

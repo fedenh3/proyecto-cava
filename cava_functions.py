@@ -86,16 +86,21 @@ def get_player_stats(jugador_id):
         j = df_j.iloc[0]
 
         # Sumamos el rendimiento detallado de la tabla stats
+        # JOIN con partidos para obtener penales en contra totales del partido
         query = f"""
             SELECT COUNT(*) as pj, 
-                   SUM(CASE WHEN es_titular THEN 1 ELSE 0 END) as titular,
-                   SUM(minutos_jugados) as minutos,
-                   SUM(goles_marcados) as goles,
-                   SUM(goles_recibidos) as recibidos,
-                   SUM(amarillas) as amarillas,
-                   SUM(rojas) as rojas
-            FROM stats
-            WHERE id_jugador = {ph}
+                   SUM(CASE WHEN s.es_titular THEN 1 ELSE 0 END) as titular,
+                   SUM(s.minutos_jugados) as minutos,
+                   SUM(s.goles_marcados) as goles,
+                   SUM(s.goles_recibidos) as recibidos,
+                   SUM(s.amarillas) as amarillas,
+                   SUM(s.rojas) as rojas,
+                   SUM(CASE WHEN s.minutos_jugados > 0 AND s.goles_recibidos = 0 THEN 1 ELSE 0 END) as vallas_invictas,
+                   SUM(s.goles_recibidos_penal) as recibidos_penal,
+                   SUM(p.penales_contra) as penales_contra_total
+            FROM stats s
+            JOIN partidos p ON s.id_partido = p.id
+            WHERE s.id_jugador = {ph}
         """
         df_stats = pd.read_sql(query, conn, params=(jugador_id,))
         
@@ -103,6 +108,7 @@ def get_player_stats(jugador_id):
         res = df_stats.iloc[0].to_dict()
         def clean_val(val): return val if val is not None else 0
         
+        # Datos Iniciales (Excel)
         res['pj'] = clean_val(res.get('pj')) + j['pj_inicial']
         res['titular'] = clean_val(res.get('titular')) + j['titular_inicial']
         res['goles'] = clean_val(res.get('goles')) + j['goles_marcados_inicial']
@@ -110,6 +116,15 @@ def get_player_stats(jugador_id):
         res['amarillas'] = clean_val(res.get('amarillas')) + j['amarillas_inicial']
         res['rojas'] = clean_val(res.get('rojas')) + j['rojas_inicial']
         res['minutos'] = clean_val(res.get('minutos'))
+        
+        # Metricas Nuevas (Solo DB)
+        res['vallas_invictas'] = clean_val(res.get('vallas_invictas'))
+        res['recibidos_penal'] = clean_val(res.get('recibidos_penal'))
+        
+        # Calculo de penales atajados/desviados (Estimado)
+        # Penales en contra totales en sus partidos - Penales que le metieron
+        penales_total = clean_val(res.get('penales_contra_total'))
+        res['penales_atajados'] = max(0, penales_total - res['recibidos_penal'])
         
         return pd.DataFrame([res])
     finally:
@@ -352,6 +367,114 @@ def get_stats_against_rival(rival_id):
             "gf": df['goles_favor'].sum(),
             "gc": df['goles_contra'].sum()
         }
+    finally:
+        close_connection(conn)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_referee_stats():
+    """
+    Retorna métricas de rendimiento agrupadas por árbitro.
+    """
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        # Subquery para amarillas CAVA (ya que están en stats, no en partido)
+        # Nota: Esto suma todas las amarillas de CAVA en partidos dirigidos por ese árbitro.
+        
+        query = """
+            SELECT 
+                a.nombre as "Árbitro",
+                COUNT(p.id) as "PJ",
+                SUM(CASE WHEN p.goles_favor > p.goles_contra THEN 1 ELSE 0 END) as "PG",
+                SUM(CASE WHEN p.goles_favor = p.goles_contra THEN 1 ELSE 0 END) as "PE",
+                SUM(CASE WHEN p.goles_favor < p.goles_contra THEN 1 ELSE 0 END) as "PP",
+                SUM(p.penales_favor) as "Penales Favor",
+                SUM(p.penales_contra) as "Penales Contra",
+                SUM(p.rojas_cava) as "Rojas CAVA",
+                SUM(p.rojas_rival) as "Rojas Rival",
+                (
+                    SELECT COUNT(*) 
+                    FROM stats s 
+                    JOIN partidos p2 ON s.id_partido = p2.id 
+                    WHERE p2.id_arbitro = a.id AND s.amarillas > 0
+                ) as "Amarillas CAVA"
+            FROM arbitros a
+            JOIN partidos p ON p.id_arbitro = a.id
+            GROUP BY a.id, a.nombre
+            ORDER BY "PJ" DESC
+        """
+        # Nota: s.amarillas suele ser 1. Si hubo doble amarilla es roja. 
+        # Si guardamos 2 amarillas como int 2, deberíamos usar SUM(s.amarillas). 
+        # Por seguridad usaré SUM(s.amarillas) en la subquery corregida abajo.
+        
+        query_corrected = """
+            SELECT 
+                a.nombre as "Árbitro",
+                COUNT(p.id) as "PJ",
+                SUM(CASE WHEN p.goles_favor > p.goles_contra THEN 1 ELSE 0 END) as "PG",
+                SUM(CASE WHEN p.goles_favor = p.goles_contra THEN 1 ELSE 0 END) as "PE",
+                SUM(CASE WHEN p.goles_favor < p.goles_contra THEN 1 ELSE 0 END) as "PP",
+                SUM(p.penales_favor) as "Penales Favor",
+                SUM(p.penales_contra) as "Penales Contra",
+                SUM(p.rojas_cava) as "Rojas CAVA",
+                SUM(p.rojas_rival) as "Rojas Rival",
+                COALESCE((
+                    SELECT SUM(s.amarillas) 
+                    FROM stats s 
+                    JOIN partidos p2 ON s.id_partido = p2.id 
+                    WHERE p2.id_arbitro = a.id
+                ), 0) as "Amarillas CAVA"
+            FROM arbitros a
+            JOIN partidos p ON p.id_arbitro = a.id
+            GROUP BY a.id, a.nombre
+            HAVING COUNT(p.id) > 0
+            ORDER BY "PJ" DESC
+        """
+        
+        return pd.read_sql(query_corrected, conn)
+    finally:
+        close_connection(conn)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_goal_types_stats(torneo_id=None, temporada=None):
+    """
+    Retorna la distribución de tipos de gol (Cabeza, Penal, Jugada, Tiro Libre).
+    """
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        ph = get_placeholder(conn)
+        where = "WHERE 1=1"
+        params = []
+        if torneo_id and torneo_id != "Todos":
+            where += f" AND p.id_torneo = {ph}"
+            params.append(torneo_id)
+        if temporada and temporada != "Todas":
+            where += f" AND t.temporada = {ph}"
+            params.append(temporada)
+            
+        query = f"""
+            SELECT 
+                SUM(s.goles_jugada) as "Jugada",
+                SUM(s.goles_cabeza) as "Cabeza",
+                SUM(s.goles_penal) as "Penal",
+                SUM(s.goles_tiro_libre) as "Tiro Libre"
+            FROM stats s
+            JOIN partidos p ON s.id_partido = p.id
+            JOIN torneos t ON p.id_torneo = t.id
+            {where}
+        """
+        df = pd.read_sql(query, conn, params=params)
+        if df.empty: return pd.DataFrame()
+        
+        # Transponer para Altair: de columnas a filas (Tipo, Cantidad)
+        data = df.iloc[0].to_dict()
+        chart_data = []
+        for k, v in data.items():
+            if v and v > 0: # Solo mostramos si hay goles
+                chart_data.append({"Tipo": k, "Cantidad": v})
+                
+        return pd.DataFrame(chart_data)
     finally:
         close_connection(conn)
 
