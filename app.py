@@ -138,7 +138,7 @@ with col_title1:
     else:
         st.markdown("⚽")
 with col_title2:
-    st.title("CAVA Stats - Inteligencia Deportiva")
+    st.title("Victoriano Arenas")
 
 # Cargamos los datos básicos
 df_torneos = cf.load_torneos()
@@ -268,7 +268,7 @@ with tab0:
                      use_container_width=True, hide_index=True)
 
     st.divider()
-    st.write("**Historial contra Rivales**")
+    st.write("**Historiales**")
     df_rivales = cf.load_rivales()
     if not df_rivales.empty:
         sel_rival = st.selectbox("Seleccionar Rival para ver historial", df_rivales['nombre'].tolist())
@@ -305,9 +305,12 @@ with tab1:
     if df_partidos.empty:
         st.info("No hay partidos registrados para los filtros seleccionados.")
     else:
+        # Crear columna de resultado combinado
+        df_display = df_partidos.copy()
+        df_display['Resultado'] = df_display['goles_favor'].astype(str) + ' - ' + df_display['goles_contra'].astype(str)
         # Mostramos una tabla con el detalle de cada partido
-        cols_show = ['nro_fecha', 'rival_nombre', 'condicion', 'goles_favor', 'goles_contra', 'torneo_nombre']
-        st.dataframe(df_partidos[cols_show], use_container_width=True, hide_index=True)
+        cols_show = ['nro_fecha', 'rival_nombre', 'condicion', 'Resultado', 'torneo_nombre']
+        st.dataframe(df_display[cols_show], use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------
 # SOLAPA 2: FICHAS DE JUGADORES
