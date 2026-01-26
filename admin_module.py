@@ -50,6 +50,11 @@ def render_match_loader():
     df_tecnicos = cf.load_tecnicos()
     tecnico_opts = ["Sin DT"] + (df_tecnicos['nombre'].tolist() if not df_tecnicos.empty else [])
     sel_tecnico = st.selectbox("Director Técnico", tecnico_opts)
+    
+    # Árbitro del partido
+    df_arbitros = cf.load_arbitros()
+    arbitro_opts = ["Sin árbitro"] + (df_arbitros['nombre'].tolist() if not df_arbitros.empty else [])
+    sel_arbitro = st.selectbox("Árbitro", arbitro_opts)
         
     c1, c2 = st.columns(2)
     gf = c1.number_input("Goles A Favor", 0, 20, 0)
@@ -112,6 +117,12 @@ def render_match_loader():
         try:
             tid = df_torneos[df_torneos['nombre'] == sel_torneo]['id'].iloc[0]
             rid = df_rivales[df_rivales['nombre'] == sel_rival]['id'].iloc[0]
+            # Árbitro es opcional
+            aid = None
+            if sel_arbitro != "Sin árbitro" and not df_arbitros.empty:
+                arb_row = df_arbitros[df_arbitros['nombre'] == sel_arbitro]
+                if not arb_row.empty:
+                    aid = int(arb_row['id'].iloc[0])
         except:
             st.error("Error identificando Torneo o Rival. Revisa la base de datos.")
             return
@@ -119,6 +130,7 @@ def render_match_loader():
         match_data = {
             'id_torneo': int(tid),
             'id_rival': int(rid),
+            'id_arbitro': aid,
             'fecha': str(fecha),
             'condicion': condicion[0], # 'L' o 'V'
             'gf': int(gf),
@@ -141,9 +153,9 @@ def render_match_loader():
 
 def render_data_management():
     st.header("📊 Gestión de Datos")
-    st.write("Administrá torneos, rivales, técnicos y jugadores para preparar la temporada.")
+    st.write("Administrá torneos, rivales, técnicos, árbitros y jugadores para preparar la temporada.")
     
-    tabs = st.tabs(["📅 Torneos", "🏟️ Rivales", "👔 Técnicos", "👥 Jugadores"])
+    tabs = st.tabs(["📅 Torneos", "🏟️ Rivales", "👔 Técnicos", "⚖️ Árbitros", "👥 Jugadores"])
     
     # --- TAB TORNEOS ---
     with tabs[0]:
@@ -224,8 +236,33 @@ def render_data_management():
                 else:
                     st.warning("Ingresá el nombre del técnico")
     
-    # --- TAB JUGADORES ---
+    # --- TAB ÁRBITROS ---
     with tabs[3]:
+        st.subheader("Árbitros")
+        
+        df_arbitros = cf.load_arbitros()
+        if not df_arbitros.empty:
+            st.dataframe(df_arbitros[['nombre']], use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay árbitros registrados.")
+        
+        st.markdown("##### ➕ Agregar Nuevo Árbitro")
+        with st.form("new_arbitro", clear_on_submit=True):
+            arb_nombre = st.text_input("Nombre Completo", placeholder="Ej: Pablo Echavarría")
+            
+            if st.form_submit_button("Agregar Árbitro", type="primary"):
+                if arb_nombre:
+                    ok, msg = cf.create_arbitro(arb_nombre.strip())
+                    if ok:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+                else:
+                    st.warning("Ingresá el nombre del árbitro")
+    
+    # --- TAB JUGADORES ---
+    with tabs[4]:
         st.subheader("Plantel de Jugadores")
         
         df_jugadores = cf.load_jugadores()

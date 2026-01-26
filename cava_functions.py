@@ -396,24 +396,24 @@ def save_match(match_data, df_stats):
         ph = get_placeholder(conn)
         c = conn.cursor()
         
-        # 1. Insertar Partido
+        # 1. Insertar Partido (incluyendo árbitro)
         query_match = f"""
-            INSERT INTO partidos (id_torneo, id_rival, nro_fecha, condicion, goles_favor, goles_contra)
-            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            INSERT INTO partidos (id_torneo, id_rival, id_arbitro, nro_fecha, condicion, goles_favor, goles_contra)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
         """
         # Postgres necesita RETURNING para obtener el ID insertado
         if "psycopg2" in str(conn.__class__):
             query_match += " RETURNING id"
             c.execute(query_match, (
-                match_data['id_torneo'], match_data['id_rival'], match_data['fecha'],
-                match_data['condicion'], match_data['gf'], match_data['gc']
+                match_data['id_torneo'], match_data['id_rival'], match_data.get('id_arbitro'),
+                match_data['fecha'], match_data['condicion'], match_data['gf'], match_data['gc']
             ))
             match_id = c.fetchone()[0]
         else:
             # SQLite usa lastrowid
             c.execute(query_match, (
-                match_data['id_torneo'], match_data['id_rival'], match_data['fecha'],
-                match_data['condicion'], match_data['gf'], match_data['gc']
+                match_data['id_torneo'], match_data['id_rival'], match_data.get('id_arbitro'),
+                match_data['fecha'], match_data['condicion'], match_data['gf'], match_data['gc']
             ))
             match_id = c.lastrowid
 
@@ -479,6 +479,39 @@ def load_posiciones():
     if not conn: return pd.DataFrame()
     try:
         return pd.read_sql("SELECT * FROM posiciones ORDER BY nombre", conn)
+    finally:
+        close_connection(conn)
+
+def load_arbitros():
+    """Carga lista de todos los árbitros."""
+    conn = get_connection()
+    if not conn: return pd.DataFrame()
+    try:
+        return pd.read_sql("SELECT * FROM arbitros ORDER BY nombre", conn)
+    finally:
+        close_connection(conn)
+
+# --- ÁRBITROS ---
+def create_arbitro(nombre):
+    """Crea un nuevo árbitro."""
+    conn = get_connection()
+    if not conn: return False, "Error de conexión"
+    try:
+        ph = get_placeholder(conn)
+        c = conn.cursor()
+        
+        # Verificar si existe
+        c.execute(f"SELECT id FROM arbitros WHERE UPPER(nombre) = UPPER({ph})", (nombre,))
+        if c.fetchone():
+            return False, f"El árbitro '{nombre}' ya existe"
+        
+        c.execute(f"INSERT INTO arbitros (nombre) VALUES ({ph})", (nombre,))
+        conn.commit()
+        st.cache_data.clear()
+        return True, f"Árbitro '{nombre}' creado exitosamente"
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error: {e}"
     finally:
         close_connection(conn)
 
