@@ -69,15 +69,45 @@ if not check_db_integrity():
     st.success("✅ ¡Todo listo! Cargando dashboard...")
     st.rerun()
 
-# Diseño estético (CSS)
-st.markdown("""
+LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Escudo_del_Club_Atl%C3%A9tico_Victoriano_Arenas.svg/1200px-Escudo_del_Club_Atl%C3%A9tico_Victoriano_Arenas.svg.png"
+
+# Diseño estético (CSS) - Colores del CAVA: Celeste (#75AADB) y Blanco
+st.markdown(f"""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; font-weight: 600; }
+    .main {{ background-color: #f0f2f6; }}
+    .stMetric {{ 
+        background-color: white; 
+        padding: 15px; 
+        border-radius: 10px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #75AADB;
+    }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 24px; }}
+    .stTabs [data-baseweb="tab"] {{ 
+        height: 50px; 
+        white-space: pre-wrap; 
+        font-weight: 700; 
+        color: #333;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: #75AADB !important;
+        border-bottom-color: #75AADB !important;
+    }}
+    /* Estilo para la barra lateral */
+    [data-testid="stSidebar"] {{
+        background-color: #ffffff;
+        border-right: 2px solid #75AADB;
+    }}
+    /* Títulos en celeste */
+    h1, h2, h3 {{
+        color: #1d3557;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }}
     </style>
 """, unsafe_allow_html=True)
+
+# Logo en la barra lateral
+st.sidebar.image(LOGO_URL, width=200)
 
 # ==============================================================================
 # MODO DE NAVEGACIÓN
@@ -91,7 +121,12 @@ if view_mode == "⚙️ Administración":
 # ==============================================================================
 # DASHBOARD PÚBLICO
 # ==============================================================================
-st.title("⚽ CAVA - Sistema de Estadísticas")
+# Título con Logo
+col_title1, col_title2 = st.columns([1, 6])
+with col_title1:
+    st.image(LOGO_URL, width=80)
+with col_title2:
+    st.title("CAVA Stats - Inteligencia Deportiva")
 
 # Cargamos los datos básicos
 df_torneos = cf.load_torneos()
