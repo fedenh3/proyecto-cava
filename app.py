@@ -165,7 +165,7 @@ with st.sidebar:
     sel_torneo = st.selectbox("Torneo", torneos_list)
 
 # Definición de las solapas (Tabs) principales
-tab0, tab1, tab2, tab3 = st.tabs(["📈 Análisis", "🏟️ Partidos", "👤 Jugadores", "⚖️ Árbitros"])
+tab0, tab1, tab2 = st.tabs(["📈 Análisis", "🏟️ Partidos", "👤 Jugadores"])
 
 # ---------------------------------------------------------
 # SOLAPA 0: DASHBOARD DE ANÁLISIS GLOBAL
@@ -243,32 +243,6 @@ with tab0:
         else:
             st.info("Sin datos")
             
-    # --- ANÁLISIS DE GOLES ---
-    st.markdown("##### ⚽ Cómo hacemos los goles")
-    df_goals = cf.get_goal_types_stats(torneo_id=tid, temporada=sel_temp)
-    if not df_goals.empty:
-        c_goal = alt.Chart(df_goals).mark_arc(innerRadius=60).encode(
-            theta=alt.Theta(field="Cantidad", type="quantitative"),
-            color=alt.Color(field="Tipo", scale=alt.Schema(range=["#ff9f43", "#1dd1a1", "#54a0ff", "#5f27cd"])),
-            tooltip=["Tipo", "Cantidad"]
-        )
-        st.altair_chart(c_goal, use_container_width=True)
-    
-    st.divider()
-
-    # --- ANÁLISIS DE GOLES ---
-    st.markdown("##### ⚽ Cómo hacemos los goles")
-    df_goals = cf.get_goal_types_stats(torneo_id=tid, temporada=sel_temp)
-    if not df_goals.empty:
-        c_goal = alt.Chart(df_goals).mark_arc(innerRadius=60).encode(
-            theta=alt.Theta(field="Cantidad", type="quantitative"),
-            color=alt.Color(field="Tipo", scale=alt.Schema(range=["#ff9f43", "#1dd1a1", "#54a0ff", "#5f27cd"])),
-            tooltip=["Tipo", "Cantidad"]
-        )
-        st.altair_chart(c_goal, use_container_width=True)
-    
-    st.divider()
-
     # --- RACHA DE FORMA ---
     st.markdown("##### Racha Actual")
     df_form = cf.get_recent_form(limit=5, torneo_id=tid, temporada=sel_temp)
@@ -376,36 +350,6 @@ with tab2:
                  c4.metric("Recibidos", recibidos)
                  c5.metric("Titular", titular)
                  
-                 # Métricas de Arquero (si corresponde)
-                 if "Arquero" in pos_name or s.get('vallas_invictas', 0) > 0:
-                     st.markdown("##### 🧤 Stats de Arquero")
-                     aq1, aq2, aq3 = st.columns(3)
-                     aq1.metric("Vallas Invictas", int(s.get('vallas_invictas', 0)))
-                     aq2.metric("Penales Recibidos (Gol)", int(s.get('recibidos_penal', 0)))
-                     # Penales Atajados/Desviados (Estimado)
-                     aq3.metric("Penales Atajados/Desviados", int(s.get('penales_atajados', 0)))
-                 
                  st.divider()
                  st.write("**Historial de partidos detallado**")
                  st.dataframe(match_log, hide_index=True, use_container_width=True)
-
-# ---------------------------------------------------------
-# SOLAPA 3: ÁRBITROS
-# ---------------------------------------------------------
-with tab3:
-    st.subheader("⚖️ Análisis de Árbitros")
-    st.write("Historial y desempeño del equipo con cada juez.")
-    
-    df_refs = cf.get_referee_stats()
-    
-    if not df_refs.empty:
-        # Formateo visual
-        st.dataframe(
-            df_refs.style.background_gradient(subset=['PG'], cmap='Greens')
-                   .background_gradient(subset=['PP'], cmap='Reds')
-                   .format(precision=0),
-            use_container_width=True, 
-            height=600
-        )
-    else:
-        st.info("No hay datos de árbitros cargados aún.")
