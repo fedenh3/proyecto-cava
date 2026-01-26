@@ -438,13 +438,20 @@ def save_match(match_data, df_stats):
                     int(row['goles']),
                     int(row['goles_recibidos']) if 'goles_recibidos' in row else 0,
                     int(row['amarillas']),
-                    int(row['rojas'])
+                    int(row['rojas']),
+                    int(row.get('goles_penal', 0)),
+                    int(row.get('goles_tiro_libre', 0)),
+                    int(row.get('goles_cabeza', 0)),
+                    int(row.get('goles_jugada', 0)),
+                    int(row.get('goles_recibidos_penal', 0))
                 ))
 
         if batch_stats:
             query_stats = f"""
-                INSERT INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, goles_marcados, goles_recibidos, amarillas, rojas)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                INSERT INTO stats (id_partido, id_jugador, minutos_jugados, es_titular, 
+                                   goles_marcados, goles_recibidos, amarillas, rojas,
+                                   goles_penal, goles_tiro_libre, goles_cabeza, goles_jugada, goles_recibidos_penal)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
             """
             c.executemany(query_stats, batch_stats)
             

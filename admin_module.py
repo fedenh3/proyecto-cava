@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import cava_functions as cf
+from db_migrations import run_migration_v4
 
 def login_form():
     st.markdown("### 🔒 Acceso Restringido")
@@ -76,6 +77,13 @@ def render_match_loader():
             df_edit['goles'] = 0
             df_edit['amarillas'] = 0
             df_edit['rojas'] = 0
+            # Detalles Goles
+            df_edit['goles_penal'] = 0
+            df_edit['goles_tiro_libre'] = 0
+            df_edit['goles_cabeza'] = 0
+            df_edit['goles_jugada'] = 0
+            # Detalles Arquero
+            df_edit['goles_recibidos_penal'] = 0
             # Formato visual
             df_edit['Nombre Completo'] = df_edit['nombre'] + " " + df_edit['apellido']
             # Ordenamos por apellido
@@ -88,7 +96,11 @@ def render_match_loader():
 
     # Usamos data_editor
     # Filtramos columnas para mostrar solo lo editable y el nombre
-    df_input = st.session_state['base_players'][['id', 'Nombre Completo', 'posicion_nombre', 'minutos', 'goles', 'amarillas', 'rojas']]
+    df_input = st.session_state['base_players'][[
+        'id', 'Nombre Completo', 'posicion_nombre', 'minutos', 
+        'goles', 'goles_penal', 'goles_tiro_libre', 'goles_cabeza', 'goles_jugada',
+        'amarillas', 'rojas', 'goles_recibidos_penal'
+    ]]
     
     edited_df = st.data_editor(
         df_input, 
@@ -97,9 +109,14 @@ def render_match_loader():
             "Nombre Completo": st.column_config.TextColumn("Jugador", disabled=True),
             "posicion_nombre": st.column_config.TextColumn("Pos", disabled=True),
             "minutos": st.column_config.NumberColumn("Minutos", min_value=0, max_value=120, step=1, help="0 = No jugó"),
-            "goles": st.column_config.NumberColumn("⚽ Goles", min_value=0, max_value=10),
-            "amarillas": st.column_config.NumberColumn("🟨 Amarillas", min_value=0, max_value=2),
-            "rojas": st.column_config.NumberColumn("🟥 Rojas", min_value=0, max_value=1),
+            "goles": st.column_config.NumberColumn("⚽ Total", min_value=0, max_value=10),
+            "goles_penal": st.column_config.NumberColumn("Penal", min_value=0, max_value=5),
+            "goles_tiro_libre": st.column_config.NumberColumn("TL", min_value=0, max_value=5),
+            "goles_cabeza": st.column_config.NumberColumn("Cabeza", min_value=0, max_value=5),
+            "goles_jugada": st.column_config.NumberColumn("Jugada", min_value=0, max_value=10),
+            "amarillas": st.column_config.NumberColumn("🟨", min_value=0, max_value=2),
+            "rojas": st.column_config.NumberColumn("🟥", min_value=0, max_value=1),
+            "goles_recibidos_penal": st.column_config.NumberColumn("🧤 GC (Penal)", min_value=0, max_value=10, help="Goles recibidos de penal (solo arqueros)"),
         },
         hide_index=True,
         use_container_width=True,
@@ -361,6 +378,13 @@ def main():
             if 'base_players' in st.session_state:
                 del st.session_state['base_players']
             st.rerun()
+            
+        st.sidebar.divider()
+        if st.sidebar.button("⚠️ Actualizar DB (Migración v4)"):
+            with st.spinner("Actualizando esquema..."):
+                ok, msg = run_migration_v4()
+                if ok: st.sidebar.success(msg)
+                else: st.sidebar.error(msg)
             
         if opt == "📝 Cargar Partido":
             render_match_loader()

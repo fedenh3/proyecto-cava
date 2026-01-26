@@ -107,6 +107,15 @@ CREATE TABLE IF NOT EXISTS stats (
     amarillas INTEGER DEFAULT 0 CHECK(amarillas >= 0),
     rojas INTEGER DEFAULT 0 CHECK(rojas >= 0),
     
+    -- Detalle de goles
+    goles_penal INTEGER DEFAULT 0 CHECK(goles_penal >= 0),
+    goles_tiro_libre INTEGER DEFAULT 0 CHECK(goles_tiro_libre >= 0),
+    goles_cabeza INTEGER DEFAULT 0 CHECK(goles_cabeza >= 0),
+    goles_jugada INTEGER DEFAULT 0 CHECK(goles_jugada >= 0),
+    
+    -- Detalle arqueros
+    goles_recibidos_penal INTEGER DEFAULT 0 CHECK(goles_recibidos_penal >= 0),
+    
     PRIMARY KEY (id_partido, id_jugador),
     
     FOREIGN KEY (id_partido) REFERENCES partidos(id) ON DELETE CASCADE,
