@@ -35,6 +35,13 @@ def get_connection():
     # 1. Intentar obtener conexión Postgres cacheada
     conn = _get_cached_connection()
     
+    # Si tenemos configurado Supabase pero conn devuelto por caché es None, 
+    # significa que la conexión falló previamente y guardó el fallo. 
+    # Limpiamos la caché y reintentamos.
+    if "supabase" in st.secrets and conn is None:
+        st.cache_resource.clear()
+        conn = _get_cached_connection()
+        
     # Verificación de vida (Test query)
     if conn:
         try:
