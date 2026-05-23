@@ -93,15 +93,14 @@ if not check_db_integrity():
 
 LOGO_FILE = "images/cava_logo.png"
 
-# Diseño estético (CSS) - Colores del CAVA: Celeste (#75AADB) y Blanco
+# Diseño estético (CSS) - Adaptable a Light y Dark Mode
 st.markdown(f"""
     <style>
-    .main {{ background-color: #f0f2f6; }}
     .stMetric {{ 
-        background-color: white; 
+        background-color: var(--secondary-background-color); 
         padding: 15px; 
         border-radius: 10px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         border-left: 5px solid #75AADB;
     }}
     .stTabs [data-baseweb="tab-list"] {{ gap: 24px; }}
@@ -109,7 +108,7 @@ st.markdown(f"""
         height: 50px; 
         white-space: pre-wrap; 
         font-weight: 700; 
-        color: #333;
+        color: var(--text-color);
     }}
     .stTabs [aria-selected="true"] {{
         color: #75AADB !important;
@@ -117,12 +116,10 @@ st.markdown(f"""
     }}
     /* Estilo para la barra lateral */
     [data-testid="stSidebar"] {{
-        background-color: #ffffff;
         border-right: 2px solid #75AADB;
     }}
-    /* Títulos en celeste */
+    /* Tipografía de títulos */
     h1, h2, h3 {{
-        color: #1d3557;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }}
     </style>
