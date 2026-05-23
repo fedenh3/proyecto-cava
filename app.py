@@ -15,6 +15,28 @@ from db_config import get_connection, is_postgres, close_connection
 
 DB_FILE = "cava_stats_v2.db"
 
+# --- CONTROL DE CONEXIÓN A SUPABASE ---
+if "supabase" in st.secrets:
+    conn = get_connection()
+    if conn is None or not is_postgres(conn):
+        st.error("### ⚠️ Error de Conexión con la Base de Datos (Supabase)")
+        st.markdown("""
+            No se pudo establecer la conexión con la base de datos en la nube de **Supabase**.
+            
+            **¿Por qué sucede esto?**
+            En los planes gratuitos, Supabase **pausa automáticamente** tu proyecto si no recibe visitas o consultas durante más de una semana para conservar recursos. Al pausarse, la base de datos se apaga temporalmente y su dirección de internet deja de estar disponible.
+            
+            **Cómo solucionarlo en 2 pasos rápidos:**
+            1. Inicia sesión en tu panel de **[Supabase Dashboard](https://supabase.com/dashboard)**.
+            2. Selecciona tu proyecto del **Proyecto CAVA** y haz clic en el botón verde **"Restore"** (o Reanudar) para reactivarlo.
+            
+            *Una vez que el panel te indique que el proyecto está **Active** (suele tardar de 1 a 2 minutos), haz clic en el botón de abajo para reintentar la conexión.*
+        """)
+        if st.button("🔄 Reintentar Conexión"):
+            st.cache_resource.clear()
+            st.rerun()
+        st.stop()
+
 def check_db_integrity():
     """
     Verifica si la base de datos ya está inicializada (tablas creadas).
